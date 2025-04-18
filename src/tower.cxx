@@ -107,7 +107,7 @@ class Tower final {
             channel.page->occupancy.store(1U << 0U, std::memory_order_relaxed);
 
             for (std::size_t i{0U}; i < std::numeric_limits<std::uint64_t>::digits; ++i) {
-                ::new (static_cast<unsigned char*>(ptr) + i * (sizeof(impl::ChannelSample) + kMaxSamplePayloadSize))
+                ::new (channel.page->samples_storage + i * (sizeof(impl::ChannelSample) + kMaxSamplePayloadSize))
                     impl::ChannelSample;
             }
         }
