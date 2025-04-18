@@ -17,6 +17,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include "io/fd.hxx"
+#include "io/result.hxx"
 #include "channel.hxx"
 
 using namespace fastipc::impl;
@@ -26,52 +28,47 @@ namespace fastipc {
 namespace {
 
 ChannelPage& connect(std::string_view name) {
-    const int sockfd = ::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
+    const auto sockfd =
+        expect(io::adoptSysFd(::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0)), "failed to create client socket");
+
     ::sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
     constexpr char kPath[] = "fastipcd";
     static_assert(sizeof(kPath) <= sizeof(addr.sun_path));
     std::memcpy(addr.sun_path, kPath, sizeof(kPath));
+
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    const auto conn_res = ::connect(sockfd, reinterpret_cast<const ::sockaddr*>(&addr), sizeof(addr));
-    if (conn_res < 0) {
-        ::perror("connect failed: ");
-        std::abort();
-    }
+    expect(io::sysCheck(::connect(sockfd.fd(), reinterpret_cast<const ::sockaddr*>(&addr), sizeof(addr))),
+           "failed to connect to tower");
 
     std::array<std::uint8_t, 128u> buf{};
     buf[0] = static_cast<std::uint8_t>(name.length());
     std::memcpy(&buf[1], name.data(), name.size());
-    const auto write_res = ::write(sockfd, buf.data(), buf.size());
-    if (!write_res) {
-        ::perror("write failed: ");
-        std::abort();
-    }
+
+    const auto bytes_written =
+        expect(io::sysVal(::write(sockfd.fd(), buf.data(), buf.size())), "failed to write to tower");
+    static_cast<void>(bytes_written); // seq packet
 
     std::size_t total_size{0U};
     int memfd{-1};
     ::msghdr msg{};
+
     ::iovec iov{&total_size, sizeof(total_size)};
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
+
     alignas(::cmsghdr) std::array<char, CMSG_SPACE(sizeof(memfd))> data{};
     msg.msg_control = &data;
     msg.msg_controllen = sizeof(data);
-    const auto recv_res = ::recvmsg(sockfd, &msg, 0);
-    if (recv_res < 0) {
-        ::perror("recvmsg failed: ");
-        std::abort();
-    }
+
+    expect(io::sysCheck(::recvmsg(sockfd.fd(), &msg, 0)), "failed to receive reply from tower");
 
     const auto* const cmsg = CMSG_FIRSTHDR(&msg);
     assert(cmsg != nullptr);
     std::memcpy(&memfd, CMSG_DATA(cmsg), sizeof(memfd));
 
-    void* ptr = ::mmap(nullptr, total_size, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0);
-    if (ptr == nullptr) {
-        ::perror("mmap failed: ");
-        std::abort();
-    }
+    void* ptr = expect(io::sysVal(::mmap(nullptr, total_size, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0)),
+                       "failed to mmap channel memory");
 
     return *static_cast<ChannelPage*>(ptr);
 }
@@ -138,14 +135,15 @@ auto Writer::Sample::getSequenceId() const -> std::uint64_t {
 auto Writer::Sample::getPayload() -> void* { return +static_cast<ChannelSample*>(shadow_)->payload; }
 
 Writer::Writer(std::string_view channel_name, [[maybe_unused]] std::size_t max_payload_size)
-    : shadow_{[=]() {
+    : m_shadow{[=]() {
           auto& channel = connect(channel_name);
+          std::cout << "channel sample size:: " << channel.max_payload_size << "\n" << std::flush;
           assert(channel.max_payload_size == max_payload_size);
           return static_cast<void*>(&channel);
       }()} {}
 
 auto Writer::prepare() -> Sample {
-    auto& channel_page = *static_cast<ChannelPage*>(shadow_);
+    auto& channel_page = *static_cast<ChannelPage*>(m_shadow);
     for (;; std::this_thread::yield()) {
         // Read occupancy hints.
         auto occupancy = channel_page.occupancy.load(std::memory_order_relaxed);
@@ -176,7 +174,7 @@ auto Writer::prepare() -> Sample {
 }
 
 void Writer::submit(Sample sample_handle) {
-    auto& channel_page = *static_cast<ChannelPage*>(shadow_);
+    auto& channel_page = *static_cast<ChannelPage*>(m_shadow);
     auto& sample = *static_cast<ChannelSample*>(sample_handle.shadow_);
 
     // Timestamp the sample

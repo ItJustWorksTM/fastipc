@@ -1,3 +1,5 @@
+#pragma once
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -67,7 +69,7 @@ class Writer final {
     void submit(Sample sample_handle);
 
   private:
-    void* shadow_;
+    void* m_shadow;
 };
 
 class Logger final {
