@@ -1,4 +1,5 @@
 #include <iostream>
+#include <print>
 #include <string_view>
 #include <fastipc.hxx>
 
@@ -9,7 +10,7 @@ int main() {
 
     auto sample = writer.prepare();
 
-    std::cout << "Enter value for seq-id " << sample.getSequenceId() << ": ";
+    std::print("Enter value for seq-id {}: ", sample.getSequenceId());
     std::cin.getline(static_cast<char*>(sample.getPayload()), 256u);
 
     writer.submit(std::move(sample));

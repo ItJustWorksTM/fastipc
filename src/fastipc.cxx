@@ -11,6 +11,7 @@
 #include <limits>
 #include <string_view>
 #include <thread>
+#include <print>
 
 #include <cstdlib>
 #include <sys/mman.h>
@@ -137,7 +138,8 @@ auto Writer::Sample::getPayload() -> void* { return +static_cast<ChannelSample*>
 Writer::Writer(std::string_view channel_name, [[maybe_unused]] std::size_t max_payload_size)
     : m_shadow{[=]() {
           auto& channel = connect(channel_name);
-          std::cout << "channel sample size:: " << channel.max_payload_size << "\n" << std::flush;
+          std::print("channel sample size: {}\n", channel.max_payload_size);
+
           assert(channel.max_payload_size == max_payload_size);
           return static_cast<void*>(&channel);
       }()} {}
