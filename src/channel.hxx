@@ -29,15 +29,15 @@ struct ChannelPage final {
     alignas(ChannelSample) std::byte samples_storage[0];
 #pragma GCC diagnostic pop
 
-    std::size_t sample_size() const { return sizeof(ChannelSample) + max_payload_size; }
-    std::size_t index_of(const ChannelSample& sample) const {
+    [[nodiscard]] std::size_t sample_size() const { return sizeof(ChannelSample) + max_payload_size; }
+    [[nodiscard]] std::size_t index_of(const ChannelSample& sample) const {
         return (reinterpret_cast<const std::byte*>(&sample) - samples_storage) / sample_size();
     }
 
-    const ChannelSample& operator[](std::size_t index) const {
+    [[nodiscard]] const ChannelSample& operator[](std::size_t index) const {
         return *reinterpret_cast<const ChannelSample*>(&samples_storage[index * sample_size()]);
     }
-    ChannelSample& operator[](std::size_t index) {
+    [[nodiscard]] ChannelSample& operator[](std::size_t index) {
         return *reinterpret_cast<ChannelSample*>(&samples_storage[index * sample_size()]);
     }
 };

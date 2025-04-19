@@ -12,9 +12,9 @@ class Reader final {
   public:
     class Sample final {
       public:
-        auto getSequenceId() const -> std::uint64_t;
-        auto getTimestamp() const -> std::chrono::system_clock::time_point;
-        auto getPayload() const -> const void*;
+        [[nodiscard]] auto getSequenceId() const -> std::uint64_t;
+        [[nodiscard]] auto getTimestamp() const -> std::chrono::system_clock::time_point;
+        [[nodiscard]] auto getPayload() const -> const void*;
 
       private:
         friend class Reader;
@@ -27,10 +27,10 @@ class Reader final {
     Reader(std::string_view channel_name, std::size_t max_payload_size);
 
     /// Indicates whether a sample with a greater sequence id is available
-    auto hasNewData(std::uint64_t sequence_id) const -> bool;
+    [[nodiscard]] auto hasNewData(std::uint64_t sequence_id) const -> bool;
 
     /// Acquires the latest available data sample
-    auto acquire() -> Sample;
+    [[nodiscard]] auto acquire() -> Sample;
 
     /// Release the provided sample
     ///
@@ -46,8 +46,8 @@ class Writer final {
   public:
     class Sample final {
       public:
-        auto getSequenceId() const -> std::uint64_t;
-        auto getPayload() -> void*;
+        [[nodiscard]] auto getSequenceId() const -> std::uint64_t;
+        [[nodiscard]] auto getPayload() -> void*;
 
       private:
         friend class Writer;
@@ -61,7 +61,7 @@ class Writer final {
     /// Prepares a new sample to fill
     ///
     /// @note This method has undeterministic worst-case execution time.
-    auto prepare() -> Sample;
+    [[nodiscard]] auto prepare() -> Sample;
 
     /// Submit the filled sample to the system
     ///

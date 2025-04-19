@@ -10,7 +10,7 @@ namespace fastipc {
 namespace io {
 
 template <std::size_t n, std::size_t extent>
-constexpr std::span<const std::byte, n> takeBuf(std::span<const std::byte, extent>& self) noexcept {
+[[nodiscard]] constexpr std::span<const std::byte, n> takeBuf(std::span<const std::byte, extent>& self) noexcept {
     const auto taken = self.template first<n>();
 
     self = self.subspan(n);
@@ -19,7 +19,8 @@ constexpr std::span<const std::byte, n> takeBuf(std::span<const std::byte, exten
 }
 
 template <std::size_t extent>
-constexpr std::span<const std::byte> takeBuf(std::span<const std::byte, extent>& self, std::size_t n) noexcept {
+[[nodiscard]] constexpr std::span<const std::byte> takeBuf(std::span<const std::byte, extent>& self,
+                                                           std::size_t n) noexcept {
     const auto taken = self.first(n);
 
     self = self.subspan(n);
@@ -28,7 +29,7 @@ constexpr std::span<const std::byte> takeBuf(std::span<const std::byte, extent>&
 }
 
 template <typename T, std::size_t extent>
-constexpr T getBuf(std::span<const std::byte, extent>& self) noexcept {
+[[nodiscard]] constexpr T getBuf(std::span<const std::byte, extent>& self) noexcept {
     const auto taken = takeBuf<sizeof(T)>(self);
 
     T value;

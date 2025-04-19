@@ -11,9 +11,9 @@ template <typename T>
 using expected = std::expected<T, std::error_code>;
 using unexpected = std::unexpected<std::error_code>;
 
-inline std::error_code errnoCode() noexcept { return std::error_code{errno, std::system_category()}; }
+[[nodiscard]] inline std::error_code errnoCode() noexcept { return std::error_code{errno, std::system_category()}; }
 
-inline io::expected<int> sysVal(int val) noexcept {
+[[nodiscard]] inline io::expected<int> sysVal(int val) noexcept {
     if (val < 0) {
         return io::unexpected{errnoCode()};
     }
@@ -21,7 +21,7 @@ inline io::expected<int> sysVal(int val) noexcept {
     return val;
 }
 
-inline io::expected<void*> sysVal(void* val) noexcept {
+[[nodiscard]] inline io::expected<void*> sysVal(void* val) noexcept {
     if (val == nullptr) {
         return io::unexpected{errnoCode()};
     }
@@ -29,7 +29,7 @@ inline io::expected<void*> sysVal(void* val) noexcept {
     return val;
 }
 
-inline io::expected<void> sysCheck(int val) noexcept {
+[[nodiscard]] inline io::expected<void> sysCheck(int val) noexcept {
     if (val < 0) {
         return io::unexpected{errnoCode()};
     }
@@ -40,7 +40,7 @@ inline io::expected<void> sysCheck(int val) noexcept {
 } // namespace io
 
 template <typename T>
-T expect(std::expected<T, std::error_code>&& expected, std::string_view message = "unexpected") noexcept {
+[[nodiscard]] T expect(std::expected<T, std::error_code>&& expected, std::string_view message = "unexpected") noexcept {
     if (expected.has_value()) {
         return std::move(expected.value());
     }

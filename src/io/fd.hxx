@@ -13,7 +13,7 @@ namespace io {
 
 class Fd final {
   public:
-    constexpr explicit Fd() noexcept : m_fd{-1} {}
+    constexpr explicit Fd() noexcept = default;
     constexpr explicit Fd(int fd) noexcept : m_fd{fd} {}
 
     constexpr Fd(const Fd&) noexcept = delete;
@@ -34,13 +34,13 @@ class Fd final {
         }
     }
 
-    constexpr int fd() const noexcept { return m_fd; }
+    [[nodiscard]] constexpr int fd() const noexcept { return m_fd; }
 
   private:
-    int m_fd;
+    int m_fd{-1};
 };
 
-inline io::expected<Fd> adoptSysFd(int fd) noexcept {
+[[nodiscard]] constexpr io::expected<Fd> adoptSysFd(int fd) noexcept {
     return sysVal(fd).transform([](int fd) { return Fd{fd}; });
 }
 

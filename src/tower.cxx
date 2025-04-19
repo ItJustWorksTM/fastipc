@@ -28,7 +28,7 @@
 namespace fastipc {
 namespace {
 
-ClientRequest readClientRequest(std::span<const std::byte>& buf) noexcept {
+[[nodiscard]] ClientRequest readClientRequest(std::span<const std::byte>& buf) noexcept {
     const auto requester_type = io::getBuf<std::underlying_type_t<RequesterType>>(buf);
     const auto max_payload_size = io::getBuf<std::size_t>(buf);
     const auto topic_name_buf = io::takeBuf(buf, io::getBuf<std::uint8_t>(buf));
@@ -44,7 +44,7 @@ ClientRequest readClientRequest(std::span<const std::byte>& buf) noexcept {
 
 class Tower final {
   public:
-    static Tower create(std::string_view path) {
+    [[nodiscard]] static Tower create(std::string_view path) {
         auto sockfd = expect(io::adoptSysFd(::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0)),
                              "failed to create tower socket");
 
@@ -144,7 +144,7 @@ class Tower final {
         std::memcpy(CMSG_DATA(cmsg), &channel.memfd, sizeof(channel.memfd));
         msg.msg_controllen = cmsg->cmsg_len;
 
-        expect(io::sysVal(::sendmsg(clientfd.fd(), &msg, 0)), "failed to send reply to client");
+        static_cast<void>(expect(io::sysVal(::sendmsg(clientfd.fd(), &msg, 0)), "failed to send reply to client"));
     }
 
     io::Fd m_sockfd;

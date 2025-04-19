@@ -43,7 +43,7 @@ void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request)
     io::putBuf(buf, topic_name_buf);
 }
 
-ChannelPage& connect(const ClientRequest& request) {
+[[nodiscard]] ChannelPage& connect(const ClientRequest& request) {
     const auto sockfd =
         expect(io::adoptSysFd(::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0)), "failed to create client socket");
 
