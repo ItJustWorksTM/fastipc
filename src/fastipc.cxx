@@ -21,6 +21,7 @@
 #include "io/fd.hxx"
 #include "io/result.hxx"
 #include "channel.hxx"
+#include "tower.hxx"
 
 using namespace fastipc::impl;
 
@@ -28,7 +29,7 @@ namespace fastipc {
 
 namespace {
 
-ChannelPage& connect(std::string_view name) {
+ChannelPage& connect(const ClientRequest& request) {
     const auto sockfd =
         expect(io::adoptSysFd(::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0)), "failed to create client socket");
 
@@ -43,8 +44,9 @@ ChannelPage& connect(std::string_view name) {
            "failed to connect to tower");
 
     std::array<std::uint8_t, 128u> buf{};
-    buf[0] = static_cast<std::uint8_t>(name.length());
-    std::memcpy(&buf[1], name.data(), name.size());
+
+    auto sndbuf = std::span<std::uint8_t>{buf};
+    writeClientRequest(sndbuf, request);
 
     const auto bytes_written =
         expect(io::sysVal(::write(sockfd.fd(), buf.data(), buf.size())), "failed to write to tower");
@@ -88,7 +90,7 @@ auto Reader::Sample::getPayload() const -> const void* { return +static_cast<con
 
 Reader::Reader(std::string_view channel_name, std::size_t max_payload_size)
     : shadow_{[=]() {
-          auto& channel = connect(channel_name);
+          auto& channel = connect({RequesterType::Reader, max_payload_size, channel_name});
           assert(channel.max_payload_size == max_payload_size);
           return static_cast<void*>(&channel);
       }()} {}
@@ -135,9 +137,9 @@ auto Writer::Sample::getSequenceId() const -> std::uint64_t {
 
 auto Writer::Sample::getPayload() -> void* { return +static_cast<ChannelSample*>(shadow_)->payload; }
 
-Writer::Writer(std::string_view channel_name, [[maybe_unused]] std::size_t max_payload_size)
+Writer::Writer(std::string_view channel_name, std::size_t max_payload_size)
     : m_shadow{[=]() {
-          auto& channel = connect(channel_name);
+          auto& channel = connect({RequesterType::Writer, max_payload_size, channel_name});
           std::print("channel sample size: {}\n", channel.max_payload_size);
 
           assert(channel.max_payload_size == max_payload_size);
