@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <print>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -15,7 +16,7 @@
 #include "io/fd.hxx"
 #include "io/result.hxx"
 #include "channel.hxx"
-#include "fastipc.hxx"
+#include "tower.hxx"
 
 namespace fastipc {
 namespace {
@@ -67,17 +68,24 @@ class Tower final {
         std::array<std::uint8_t, 128u> buf{};
         const auto bytes_read =
             expect(io::sysVal(::read(clientfd.fd(), buf.data(), buf.size())), "failed to read from client");
-        static_cast<void>(bytes_read); // seqpacket
 
-        const std::string name{reinterpret_cast<const char*>(&buf[1]), static_cast<std::size_t>(buf[0])};
-        auto& channel = m_channels[name];
+        auto recvbuf = std::span<const std::uint8_t>{buf.data(), static_cast<std::size_t>(bytes_read)};
+        const auto request = readClientRequest(recvbuf);
+
+        std::print("{} request for topic '{}' with max payload size of {} bytes.\n",
+                   (request.type == RequesterType::Reader ? "reader" : "writer"), request.topic_name,
+                   request.max_payload_size);
+
+        const auto topic_name = std::string{request.topic_name};
+        auto& channel = m_channels[topic_name];
 
         if (channel.page == nullptr) {
-            channel.memfd = expect(io::adoptSysFd(::memfd_create(name.c_str(), MFD_CLOEXEC)), "failed to create memfd");
+            channel.memfd =
+                expect(io::adoptSysFd(::memfd_create(topic_name.c_str(), MFD_CLOEXEC)), "failed to create memfd");
 
-            constexpr std::size_t kMaxSamplePayloadSize = 256U; // FIXME get that information from the request buffer
-            channel.total_size = sizeof(impl::ChannelPage) + std::numeric_limits<std::uint64_t>::digits *
-                                                                 (sizeof(impl::ChannelSample) + kMaxSamplePayloadSize);
+            channel.total_size =
+                sizeof(impl::ChannelPage) +
+                std::numeric_limits<std::uint64_t>::digits * (sizeof(impl::ChannelSample) + request.max_payload_size);
 
             expect(io::sysCheck(::ftruncate(channel.memfd.fd(), channel.total_size)),
                    "failed to truncate channel memory");
@@ -87,13 +95,13 @@ class Tower final {
                                "failed to mmap channel memory");
 
             channel.page = ::new (ptr) impl::ChannelPage;
-            channel.page->max_payload_size = kMaxSamplePayloadSize;
+            channel.page->max_payload_size = request.max_payload_size;
             // Weakly-reserve the first sample as default latest
             channel.page->next_seq_id.store(1U, std::memory_order_relaxed);
             channel.page->occupancy.store(1U << 0U, std::memory_order_relaxed);
 
             for (std::size_t i{0U}; i < std::numeric_limits<std::uint64_t>::digits; ++i) {
-                ::new (channel.page->samples_storage + i * (sizeof(impl::ChannelSample) + kMaxSamplePayloadSize))
+                ::new (channel.page->samples_storage + i * (sizeof(impl::ChannelSample) + request.max_payload_size))
                     impl::ChannelSample;
             }
         }
