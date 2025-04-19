@@ -6,7 +6,7 @@
 
 #include <unistd.h>
 
-#include "io/result.hxx"
+#include "result.hxx"
 
 namespace fastipc {
 namespace io {

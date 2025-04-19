@@ -6,8 +6,8 @@ add_library (fastipc STATIC)
 target_include_directories (fastipc PUBLIC include)
 target_sources (fastipc PRIVATE
     include/fastipc.hxx
-    include/io/result.hxx
-    include/io/fd.hxx
+    src/io/result.hxx
+    src/io/fd.hxx
     src/fastipc.cxx
     src/channel.hxx
 )
