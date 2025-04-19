@@ -15,8 +15,8 @@ class Fd final {
     constexpr explicit Fd() noexcept : m_fd{-1} {}
     constexpr explicit Fd(int fd) noexcept : m_fd{fd} {}
 
-    constexpr Fd(Fd const&) noexcept = delete;
-    constexpr Fd& operator=(Fd const&) noexcept = delete;
+    constexpr Fd(const Fd&) noexcept = delete;
+    constexpr Fd& operator=(const Fd&) noexcept = delete;
 
     constexpr Fd(Fd&& it) noexcept : Fd{std::exchange(it.m_fd, -1)} {}
     constexpr Fd& operator=(Fd&& rhs) noexcept {

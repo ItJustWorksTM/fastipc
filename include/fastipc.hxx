@@ -14,7 +14,7 @@ class Reader final {
       public:
         auto getSequenceId() const -> std::uint64_t;
         auto getTimestamp() const -> std::chrono::system_clock::time_point;
-        auto getPayload() const -> void const*;
+        auto getPayload() const -> const void*;
 
       private:
         friend class Reader;
