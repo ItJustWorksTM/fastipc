@@ -8,21 +8,38 @@
 #include <cstring>
 #include <limits>
 #include <print>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "io/cursor.hxx"
 #include "io/fd.hxx"
 #include "io/result.hxx"
 #include "channel.hxx"
 
 namespace fastipc {
 namespace {
+
+ClientRequest readClientRequest(std::span<const std::uint8_t>& buf) noexcept {
+    const auto requester_type = io::getBuf<std::uint8_t>(buf);
+    const auto max_payload_size = io::getBuf<std::size_t>(buf);
+    const auto topic_name_buf = io::takeBuf(buf, io::getBuf<std::uint8_t>(buf));
+
+    assert(requester_type < 2);
+
+    return ClientRequest{
+        static_cast<RequesterType>(requester_type),
+        max_payload_size,
+        {reinterpret_cast<const char*>(topic_name_buf.data()), topic_name_buf.size()},
+    };
+}
 
 class Tower final {
   public:
