@@ -1,3 +1,5 @@
+#include "tower.hxx"
+
 #include <array>
 #include <cassert>
 #include <csignal>
@@ -9,14 +11,15 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
 #include "io/fd.hxx"
 #include "io/result.hxx"
 #include "channel.hxx"
-#include "tower.hxx"
 
 namespace fastipc {
 namespace {

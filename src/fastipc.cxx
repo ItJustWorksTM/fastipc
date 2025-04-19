@@ -7,25 +7,26 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <print>
 #include <string_view>
 #include <thread>
-#include <print>
 
-#include <cstdlib>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
 #include "io/fd.hxx"
 #include "io/result.hxx"
 #include "channel.hxx"
 #include "tower.hxx"
 
-using namespace fastipc::impl;
-
 namespace fastipc {
+
+using namespace impl;
 
 namespace {
 
