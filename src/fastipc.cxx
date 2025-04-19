@@ -76,14 +76,14 @@ ChannelPage& connect(std::string_view name) {
 } // namespace
 
 auto Reader::Sample::getSequenceId() const -> std::uint64_t {
-    return static_cast<ChannelSample const*>(shadow_)->sequence_id;
+    return static_cast<const ChannelSample*>(shadow_)->sequence_id;
 }
 
 auto Reader::Sample::getTimestamp() const -> std::chrono::system_clock::time_point {
-    return static_cast<ChannelSample const*>(shadow_)->timestamp;
+    return static_cast<const ChannelSample*>(shadow_)->timestamp;
 }
 
-auto Reader::Sample::getPayload() const -> void const* { return +static_cast<ChannelSample const*>(shadow_)->payload; }
+auto Reader::Sample::getPayload() const -> const void* { return +static_cast<const ChannelSample*>(shadow_)->payload; }
 
 Reader::Reader(std::string_view channel_name, std::size_t max_payload_size)
     : shadow_{[=]() {
@@ -93,16 +93,16 @@ Reader::Reader(std::string_view channel_name, std::size_t max_payload_size)
       }()} {}
 
 bool Reader::hasNewData(std::uint64_t sequence_id) const {
-    auto const& channel_page = *static_cast<ChannelPage const*>(shadow_);
-    auto const index = channel_page.latest_sample_index.load(std::memory_order_relaxed);
-    auto const& sample = channel_page[index];
+    const auto& channel_page = *static_cast<const ChannelPage*>(shadow_);
+    const auto index = channel_page.latest_sample_index.load(std::memory_order_relaxed);
+    const auto& sample = channel_page[index];
 
     return sample.sequence_id > sequence_id;
 }
 
 auto Reader::acquire() -> Sample {
     auto& channel_page = *static_cast<ChannelPage*>(shadow_);
-    auto const index = channel_page.latest_sample_index.load(std::memory_order_relaxed);
+    const auto index = channel_page.latest_sample_index.load(std::memory_order_relaxed);
     auto& sample = channel_page[index];
 
     // Bump up sample refcount.
@@ -119,17 +119,17 @@ void Reader::release(Sample sample_handle) {
     auto& sample = *static_cast<ChannelSample*>(sample_handle.shadow_);
 
     // Bump down refcount.
-    auto const count = sample.ref_count.fetch_sub(1U, std::memory_order_relaxed);
+    const auto count = sample.ref_count.fetch_sub(1U, std::memory_order_relaxed);
 
     // If refcount is zero, hint that the sample is not being used.
     if (count == 1U) {
-        auto const index = channel_page.index_of(sample);
+        const auto index = channel_page.index_of(sample);
         channel_page.occupancy.fetch_xor(1U << index, std::memory_order_relaxed);
     }
 }
 
 auto Writer::Sample::getSequenceId() const -> std::uint64_t {
-    return static_cast<ChannelSample const*>(shadow_)->sequence_id;
+    return static_cast<const ChannelSample*>(shadow_)->sequence_id;
 }
 
 auto Writer::Sample::getPayload() -> void* { return +static_cast<ChannelSample*>(shadow_)->payload; }
@@ -181,12 +181,12 @@ void Writer::submit(Sample sample_handle) {
     sample.timestamp = std::chrono::system_clock::now();
 
     // Update latest sample index
-    auto const index = channel_page.index_of(sample);
-    auto const previous_index = channel_page.latest_sample_index.exchange(index, std::memory_order_release);
+    const auto index = channel_page.index_of(sample);
+    const auto previous_index = channel_page.latest_sample_index.exchange(index, std::memory_order_release);
 
     // Bump down previous sample's refcount.
     auto& previous_sample = channel_page[previous_index];
-    auto const count = previous_sample.ref_count.fetch_sub(1U, std::memory_order_relaxed);
+    const auto count = previous_sample.ref_count.fetch_sub(1U, std::memory_order_relaxed);
 
     // If refcount is zero, hint that the previous latest sample is not being
     // used.

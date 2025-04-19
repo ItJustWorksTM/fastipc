@@ -11,6 +11,7 @@ ColumnLimit: 120
 IndentPPDirectives: AfterHash
 BreakBeforeBraces: Custom
 AlwaysBreakTemplateDeclarations: Yes
+QualifierAlignment: Left
 BraceWrapping:
   AfterCaseLabel: false
   AfterClass: false

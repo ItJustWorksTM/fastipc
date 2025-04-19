@@ -25,12 +25,12 @@ struct ChannelPage final {
     alignas(ChannelSample) unsigned char samples_storage[0];
 
     std::size_t sample_size() const { return sizeof(ChannelSample) + max_payload_size; }
-    std::size_t index_of(ChannelSample const& sample) const {
+    std::size_t index_of(const ChannelSample& sample) const {
         return (reinterpret_cast<const unsigned char*>(&sample) - samples_storage) / sample_size();
     }
 
-    ChannelSample const& operator[](std::size_t index) const {
-        return *reinterpret_cast<ChannelSample const*>(&samples_storage[index * sample_size()]);
+    const ChannelSample& operator[](std::size_t index) const {
+        return *reinterpret_cast<const ChannelSample*>(&samples_storage[index * sample_size()]);
     }
     ChannelSample& operator[](std::size_t index) {
         return *reinterpret_cast<ChannelSample*>(&samples_storage[index * sample_size()]);
