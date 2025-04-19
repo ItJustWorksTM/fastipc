@@ -11,6 +11,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
@@ -27,14 +28,14 @@
 namespace fastipc {
 namespace {
 
-ClientRequest readClientRequest(std::span<const std::uint8_t>& buf) noexcept {
-    const auto requester_type = io::getBuf<std::uint8_t>(buf);
+ClientRequest readClientRequest(std::span<const std::byte>& buf) noexcept {
+    const auto requester_type = io::getBuf<std::underlying_type_t<RequesterType>>(buf);
     const auto max_payload_size = io::getBuf<std::size_t>(buf);
     const auto topic_name_buf = io::takeBuf(buf, io::getBuf<std::uint8_t>(buf));
 
     assert(requester_type < 2);
 
-    return ClientRequest{
+    return {
         static_cast<RequesterType>(requester_type),
         max_payload_size,
         {reinterpret_cast<const char*>(topic_name_buf.data()), topic_name_buf.size()},
@@ -85,11 +86,11 @@ class Tower final {
     explicit Tower(io::Fd sockfd) noexcept : m_sockfd{std::move(sockfd)} {}
 
     void serve(io::Fd clientfd) {
-        std::array<std::uint8_t, 128u> buf{};
+        std::array<std::byte, 128u> buf{};
         const auto bytes_read =
             expect(io::sysVal(::read(clientfd.fd(), buf.data(), buf.size())), "failed to read from client");
 
-        auto recvbuf = std::span<const std::uint8_t>{buf.data(), static_cast<std::size_t>(bytes_read)};
+        auto recvbuf = std::span<const std::byte>{buf.data(), static_cast<std::size_t>(bytes_read)};
         const auto request = readClientRequest(recvbuf);
 
         std::print("{} request for topic '{}' with max payload size of {} bytes.\n",

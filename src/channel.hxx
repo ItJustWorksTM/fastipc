@@ -13,7 +13,7 @@ struct ChannelSample final {
     std::size_t sequence_id{0U};
     std::size_t size{0U};
     std::chrono::system_clock::time_point timestamp{};
-    unsigned char payload[0];
+    std::byte payload[0];
 };
 
 struct ChannelPage final {
@@ -21,11 +21,11 @@ struct ChannelPage final {
     std::atomic_size_t next_seq_id{0U};
     std::atomic_uint64_t occupancy{0U};
     std::atomic_size_t latest_sample_index{0U};
-    alignas(ChannelSample) unsigned char samples_storage[0];
+    alignas(ChannelSample) std::byte samples_storage[0];
 
     std::size_t sample_size() const { return sizeof(ChannelSample) + max_payload_size; }
     std::size_t index_of(const ChannelSample& sample) const {
-        return (reinterpret_cast<const unsigned char*>(&sample) - samples_storage) / sample_size();
+        return (reinterpret_cast<const std::byte*>(&sample) - samples_storage) / sample_size();
     }
 
     const ChannelSample& operator[](std::size_t index) const {

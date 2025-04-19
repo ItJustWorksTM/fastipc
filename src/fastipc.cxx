@@ -33,11 +33,11 @@ using namespace impl;
 
 namespace {
 
-void writeClientRequest(std::span<std::uint8_t>& buf, const ClientRequest& request) noexcept {
-    const auto topic_name_buf = std::span<const std::uint8_t>{
-        reinterpret_cast<const std::uint8_t*>(request.topic_name.data()), request.topic_name.size()};
+void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request) noexcept {
+    const auto topic_name_buf = std::span<const std::byte>{
+        reinterpret_cast<const std::byte*>(request.topic_name.data()), request.topic_name.size()};
 
-    io::putBuf(buf, static_cast<std::uint8_t>(std::to_underlying(request.type)));
+    io::putBuf(buf, request.type);
     io::putBuf(buf, request.max_payload_size);
     io::putBuf(buf, static_cast<std::uint8_t>(topic_name_buf.size()));
     io::putBuf(buf, topic_name_buf);
@@ -57,9 +57,9 @@ ChannelPage& connect(const ClientRequest& request) {
     expect(io::sysCheck(::connect(sockfd.fd(), reinterpret_cast<const ::sockaddr*>(&addr), sizeof(addr))),
            "failed to connect to tower");
 
-    std::array<std::uint8_t, 128u> buf{};
+    std::array<std::byte, 128u> buf{};
 
-    std::span<std::uint8_t> sndbuf{buf};
+    std::span<std::byte> sndbuf{buf};
     writeClientRequest(sndbuf, request);
 
     const auto bytes_written =
