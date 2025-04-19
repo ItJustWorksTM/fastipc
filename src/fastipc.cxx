@@ -11,14 +11,17 @@
 #include <cstring>
 #include <limits>
 #include <print>
+#include <span>
 #include <string_view>
 #include <thread>
+#include <utility>
 
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "io/cursor.hxx"
 #include "io/fd.hxx"
 #include "io/result.hxx"
 #include "channel.hxx"
@@ -29,6 +32,16 @@ namespace fastipc {
 using namespace impl;
 
 namespace {
+
+void writeClientRequest(std::span<std::uint8_t>& buf, const ClientRequest& request) noexcept {
+    const auto topic_name_buf = std::span<const std::uint8_t>{
+        reinterpret_cast<const std::uint8_t*>(request.topic_name.data()), request.topic_name.size()};
+
+    io::putBuf(buf, static_cast<std::uint8_t>(std::to_underlying(request.type)));
+    io::putBuf(buf, request.max_payload_size);
+    io::putBuf(buf, static_cast<std::uint8_t>(topic_name_buf.size()));
+    io::putBuf(buf, topic_name_buf);
+}
 
 ChannelPage& connect(const ClientRequest& request) {
     const auto sockfd =
@@ -46,7 +59,7 @@ ChannelPage& connect(const ClientRequest& request) {
 
     std::array<std::uint8_t, 128u> buf{};
 
-    auto sndbuf = std::span<std::uint8_t>{buf};
+    std::span<std::uint8_t> sndbuf{buf};
     writeClientRequest(sndbuf, request);
 
     const auto bytes_written =

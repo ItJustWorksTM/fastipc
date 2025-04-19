@@ -1,0 +1,51 @@
+name: Build
+on: [push, pull_request]
+jobs:
+  build-ubuntu:
+    name: ${{ matrix.toolchain.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - name: GCC
+            cc: gcc-14
+            cxx: g++-14
+            cxxflags:
+            ld: MOLD
+            ldflags:
+          - name: Clang/LLVM
+            cc: clang-20
+            cxx: clang++-20 
+            cxxflags: -stdlib=libc++
+            ld: LLD
+            ldflags: -lllvmlibc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rui314/setup-mold@v1
+        if: matrix.toolchain.name == 'GCC'
+      - name: Grab more recent Clang/LLVM
+        if: matrix.toolchain.name == 'Clang/LLVM'
+        run: |
+            wget https://apt.llvm.org/llvm.sh
+            sudo bash ./llvm.sh 20
+            sudo apt-get update && sudo apt-get install -y clang-20 lld-20 libllvmlibc-20-dev libc++-20-dev libc++abi-20-dev
+      - name: Check deps
+        run: |
+          cmake --version
+          ninja --version
+          ${{ matrix.toolchain.cc }} --version
+          ${{ matrix.toolchain.cxx }} --version
+      - name: CMake configure
+        run: |
+          cmake -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER=${{ matrix.toolchain.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.toolchain.cxx }} \
+            -DCMAKE_CXX_FLAGS=${{ matrix.toolchain.cxxflags }} \
+            -DCMAKE_LINKER_TYPE=${{ matrix.toolchain.ld }} \
+            -DCMAKE_EXE_LINKER_FLAGS=${{ matrix.toolchain.ldflags }} \
+            -DCMAKE_LINK_WHAT_YOU_USE=True \
+            -S ./ -B ./build
+      - name: CMake build
+        run: cmake --build ./build
