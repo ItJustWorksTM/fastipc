@@ -26,7 +26,7 @@
 #include "io/fd.hxx"
 #include "io/result.hxx"
 #include "channel.hxx"
-#include "tower.hxx"
+#include "local_proto.hxx"
 
 namespace fastipc {
 
