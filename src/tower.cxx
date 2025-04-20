@@ -131,7 +131,7 @@ class Tower final {
         msg.msg_iov = &iov;
         msg.msg_iovlen = 1;
 
-        alignas(::cmsghdr) std::array<char, CMSG_SPACE(sizeof(channel.memfd))> ctrl{};
+        alignas(::cmsghdr) std::array<std::byte, CMSG_SPACE(sizeof(channel.memfd))> ctrl{};
         msg.msg_control = ctrl.data();
         msg.msg_controllen = ctrl.size();
 
