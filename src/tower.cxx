@@ -93,9 +93,9 @@ class Tower final {
         auto recvbuf = std::span<const std::byte>{buf.data(), static_cast<std::size_t>(bytes_read)};
         const auto request = readClientRequest(recvbuf);
 
-        std::print("{} request for topic '{}' with max payload size of {} bytes.\n",
-                   (request.type == RequesterType::Reader ? "reader" : "writer"), request.topic_name,
-                   request.max_payload_size);
+        std::println("{} request for topic '{}' with max payload size of {} bytes.",
+                     (request.type == RequesterType::Reader ? "reader" : "writer"), request.topic_name,
+                     request.max_payload_size);
 
         const auto topic_name = std::string{request.topic_name};
         auto& channel = m_channels[topic_name];

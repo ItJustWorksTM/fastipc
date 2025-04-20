@@ -154,7 +154,7 @@ auto Writer::Sample::getPayload() -> void* { return +static_cast<ChannelSample*>
 Writer::Writer(std::string_view channel_name, std::size_t max_payload_size)
     : m_shadow{[=]() {
           auto& channel = connect({RequesterType::Writer, max_payload_size, channel_name});
-          std::print("channel sample size: {}\n", channel.max_payload_size);
+          std::println("channel sample size: {}", channel.max_payload_size);
 
           assert(channel.max_payload_size == max_payload_size);
           return static_cast<void*>(&channel);
