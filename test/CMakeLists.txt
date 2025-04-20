@@ -13,4 +13,4 @@ include (CTest)
 
 add_executable (intraprocess_test intraprocess.cxx)
 target_link_libraries (intraprocess_test PRIVATE fastipc tower)
-add_test (NAME interprocess COMMAND intraprocess_test)
+add_test (NAME intraprocess COMMAND intraprocess_test)
