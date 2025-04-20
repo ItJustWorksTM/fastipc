@@ -25,7 +25,7 @@ target_link_libraries (tower PRIVATE fastipc)
 
 add_executable (fastipcd)
 target_sources (fastipcd PRIVATE src/main.cxx)
-target_compile_options (fastipcd PRIVATE "-Wall" "-Wextra" "-Wpedantic" "-Werror" "-Wcast-align" "-Wno-zero-length-array")
+target_compile_options (fastipcd PRIVATE "-Wall" "-Wextra" "-Wpedantic" "-Werror" "-Wcast-align")
 target_link_libraries (fastipcd PRIVATE tower)
 
 enable_testing ()
