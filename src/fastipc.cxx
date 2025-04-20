@@ -91,6 +91,11 @@ void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request)
     return *static_cast<ChannelPage*>(ptr);
 }
 
+void disconnect(ChannelPage& channel_page) {
+    expect(io::sysCheck(::munmap(&channel_page, ChannelPage::total_size(channel_page.max_payload_size))),
+           "Failed to munmap channel memory");
+}
+
 } // namespace
 
 auto Reader::Sample::getSequenceId() const -> std::uint64_t {
@@ -109,6 +114,14 @@ Reader::Reader(std::string_view channel_name, std::size_t max_payload_size)
           assert(channel.max_payload_size == max_payload_size);
           return static_cast<void*>(&channel);
       }()} {}
+
+Reader::~Reader() noexcept {
+    if (m_shadow == nullptr)
+        return;
+
+    disconnect(*static_cast<ChannelPage*>(m_shadow));
+    m_shadow = nullptr;
+}
 
 bool Reader::hasNewData(std::uint64_t sequence_id) const {
     const auto& channel_page = *static_cast<const ChannelPage*>(m_shadow);
@@ -160,6 +173,14 @@ Writer::Writer(std::string_view channel_name, std::size_t max_payload_size)
           assert(channel.max_payload_size == max_payload_size);
           return static_cast<void*>(&channel);
       }()} {}
+
+Writer::~Writer() noexcept {
+    if (m_shadow == nullptr)
+        return;
+
+    disconnect(*static_cast<ChannelPage*>(m_shadow));
+    m_shadow = nullptr;
+}
 
 auto Writer::prepare() -> Sample {
     auto& channel_page = *static_cast<ChannelPage*>(m_shadow);

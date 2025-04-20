@@ -40,6 +40,11 @@ struct ChannelPage final {
     [[nodiscard]] ChannelSample& operator[](std::size_t index) {
         return *reinterpret_cast<ChannelSample*>(&samples_storage[index * sample_size()]);
     }
+
+    [[nodiscard]] constexpr static std::size_t total_size(std::size_t max_payload_size) noexcept {
+        return sizeof(ChannelPage) +
+               std::numeric_limits<std::uint64_t>::digits * (sizeof(ChannelSample) + max_payload_size);
+    }
 };
 
 } // namespace impl

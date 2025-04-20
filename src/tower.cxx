@@ -104,9 +104,7 @@ class Tower final {
             channel.memfd =
                 expect(io::adoptSysFd(::memfd_create(topic_name.c_str(), MFD_CLOEXEC)), "failed to create memfd");
 
-            channel.total_size =
-                sizeof(impl::ChannelPage) +
-                std::numeric_limits<std::uint64_t>::digits * (sizeof(impl::ChannelSample) + request.max_payload_size);
+            channel.total_size = impl::ChannelPage::total_size(request.max_payload_size);
 
             expect(io::sysCheck(::ftruncate(channel.memfd.fd(), channel.total_size)),
                    "failed to truncate channel memory");

@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <utility>
 
 namespace fastipc {
 
@@ -25,6 +26,15 @@ class Reader final {
     /// Creates a Reader for the given channel, validating the expected payload
     /// size
     Reader(std::string_view channel_name, std::size_t max_payload_size);
+
+    Reader(const Reader&) = delete;
+    Reader(Reader&& from) noexcept : m_shadow{std::exchange(from.m_shadow, nullptr)} {}
+    Reader& operator=(const Reader&) = delete;
+    Reader& operator=(Reader&& from) & noexcept {
+        auto other = std::move(from);
+        std::swap(m_shadow, other.m_shadow);
+    }
+    ~Reader() noexcept;
 
     /// Indicates whether a sample with a greater sequence id is available
     [[nodiscard]] auto hasNewData(std::uint64_t sequence_id) const -> bool;
@@ -57,6 +67,15 @@ class Writer final {
 
     /// Creates a Writer for the given channel, setting the expected payload size
     Writer(std::string_view channel_name, std::size_t max_payload_size);
+
+    Writer(const Writer&) = delete;
+    Writer(Writer&& from) noexcept : m_shadow{std::exchange(from.m_shadow, nullptr)} {}
+    Writer& operator=(const Writer&) = delete;
+    Writer& operator=(Writer&& from) & noexcept {
+        auto other = std::move(from);
+        std::swap(m_shadow, other.m_shadow);
+    }
+    ~Writer() noexcept;
 
     /// Prepares a new sample to fill
     ///
