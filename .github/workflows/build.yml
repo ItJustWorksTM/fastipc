@@ -39,7 +39,7 @@ jobs:
       - name: CMake configure
         run: |
           cmake -G Ninja \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=${{ matrix.toolchain.cc }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.toolchain.cxx }} \
             -DCMAKE_CXX_FLAGS=${{ matrix.toolchain.cxxflags }} \
