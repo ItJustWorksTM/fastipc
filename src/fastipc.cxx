@@ -93,24 +93,24 @@ void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request)
 } // namespace
 
 auto Reader::Sample::getSequenceId() const -> std::uint64_t {
-    return static_cast<const ChannelSample*>(shadow_)->sequence_id;
+    return static_cast<const ChannelSample*>(m_shadow)->sequence_id;
 }
 
 auto Reader::Sample::getTimestamp() const -> std::chrono::system_clock::time_point {
-    return static_cast<const ChannelSample*>(shadow_)->timestamp;
+    return static_cast<const ChannelSample*>(m_shadow)->timestamp;
 }
 
-auto Reader::Sample::getPayload() const -> const void* { return +static_cast<const ChannelSample*>(shadow_)->payload; }
+auto Reader::Sample::getPayload() const -> const void* { return +static_cast<const ChannelSample*>(m_shadow)->payload; }
 
 Reader::Reader(std::string_view channel_name, std::size_t max_payload_size)
-    : shadow_{[=]() {
+    : m_shadow{[=]() {
           auto& channel = connect({RequesterType::Reader, max_payload_size, channel_name});
           assert(channel.max_payload_size == max_payload_size);
           return static_cast<void*>(&channel);
       }()} {}
 
 bool Reader::hasNewData(std::uint64_t sequence_id) const {
-    const auto& channel_page = *static_cast<const ChannelPage*>(shadow_);
+    const auto& channel_page = *static_cast<const ChannelPage*>(m_shadow);
     const auto index = channel_page.latest_sample_index.load(std::memory_order_relaxed);
     const auto& sample = channel_page[index];
 
@@ -118,7 +118,7 @@ bool Reader::hasNewData(std::uint64_t sequence_id) const {
 }
 
 auto Reader::acquire() -> Sample {
-    auto& channel_page = *static_cast<ChannelPage*>(shadow_);
+    auto& channel_page = *static_cast<ChannelPage*>(m_shadow);
     const auto index = channel_page.latest_sample_index.load(std::memory_order_relaxed);
     auto& sample = channel_page[index];
 
@@ -132,8 +132,8 @@ auto Reader::acquire() -> Sample {
 }
 
 void Reader::release(Sample sample_handle) {
-    auto& channel_page = *static_cast<ChannelPage*>(shadow_);
-    auto& sample = *static_cast<ChannelSample*>(sample_handle.shadow_);
+    auto& channel_page = *static_cast<ChannelPage*>(m_shadow);
+    auto& sample = *static_cast<ChannelSample*>(sample_handle.m_shadow);
 
     // Bump down refcount.
     const auto count = sample.ref_count.fetch_sub(1U, std::memory_order_relaxed);
@@ -146,10 +146,10 @@ void Reader::release(Sample sample_handle) {
 }
 
 auto Writer::Sample::getSequenceId() const -> std::uint64_t {
-    return static_cast<const ChannelSample*>(shadow_)->sequence_id;
+    return static_cast<const ChannelSample*>(m_shadow)->sequence_id;
 }
 
-auto Writer::Sample::getPayload() -> void* { return +static_cast<ChannelSample*>(shadow_)->payload; }
+auto Writer::Sample::getPayload() -> void* { return +static_cast<ChannelSample*>(m_shadow)->payload; }
 
 Writer::Writer(std::string_view channel_name, std::size_t max_payload_size)
     : m_shadow{[=]() {
@@ -193,7 +193,7 @@ auto Writer::prepare() -> Sample {
 
 void Writer::submit(Sample sample_handle) {
     auto& channel_page = *static_cast<ChannelPage*>(m_shadow);
-    auto& sample = *static_cast<ChannelSample*>(sample_handle.shadow_);
+    auto& sample = *static_cast<ChannelSample*>(sample_handle.m_shadow);
 
     // Timestamp the sample
     sample.timestamp = std::chrono::system_clock::now();

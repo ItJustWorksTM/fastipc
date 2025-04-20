@@ -18,8 +18,8 @@ class Reader final {
 
       private:
         friend class Reader;
-        explicit Sample(void* shadow) noexcept : shadow_{shadow} {}
-        void* shadow_;
+        explicit Sample(void* shadow) noexcept : m_shadow{shadow} {}
+        void* m_shadow;
     };
 
     /// Creates a Reader for the given channel, validating the expected payload
@@ -38,7 +38,7 @@ class Reader final {
     void release(Sample sample_handle);
 
   private:
-    void* shadow_;
+    void* m_shadow;
 };
 
 /// Channel writer
@@ -51,8 +51,8 @@ class Writer final {
 
       private:
         friend class Writer;
-        explicit Sample(void* shadow) noexcept : shadow_{shadow} {}
-        void* shadow_;
+        explicit Sample(void* shadow) noexcept : m_shadow{shadow} {}
+        void* m_shadow;
     };
 
     /// Creates a Writer for the given channel, setting the expected payload size
