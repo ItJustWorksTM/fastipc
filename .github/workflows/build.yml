@@ -1,4 +1,4 @@
-name: Build
+name: Build & Test
 on: [push, pull_request]
 jobs:
   build-ubuntu:
@@ -49,3 +49,8 @@ jobs:
             -S ./ -B ./build
       - name: CMake build
         run: cmake --build ./build
+      - name: CMake test
+        env:
+          CTEST_OUTPUT_ON_FAILURE: True
+          CTEST_NO_TESTS_ACTION: error
+        run: cmake --build ./build --target test

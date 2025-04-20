@@ -1,20 +1,35 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
-#include <string_view>
+#include <utility>
+
+#include <unordered_map>
+
+#include "io/fd.hxx"
+#include "channel.hxx"
 
 namespace fastipc {
 
-enum class RequesterType : std::uint8_t {
-    Reader = 0,
-    Writer = 1,
-};
+class Tower final {
+  public:
+    [[nodiscard]] static Tower create(std::string_view path);
 
-struct ClientRequest {
-    RequesterType type;
-    std::size_t max_payload_size;
-    std::string_view topic_name;
+    void run();
+
+    void shutdown();
+
+  private:
+    struct ChannelDescriptor final {
+        io::Fd memfd;
+        std::size_t total_size{0U};
+        impl::ChannelPage* page{nullptr};
+    };
+
+    explicit Tower(io::Fd sockfd) noexcept : m_sockfd{std::move(sockfd)} {}
+
+    void serve(io::Fd clientfd);
+
+    io::Fd m_sockfd;
+    std::unordered_map<std::string, ChannelDescriptor> m_channels;
 };
 
 } // namespace fastipc
