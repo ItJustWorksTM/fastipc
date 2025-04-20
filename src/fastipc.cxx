@@ -187,20 +187,18 @@ auto Writer::prepare() -> Sample {
     for (;; std::this_thread::yield()) {
         // Read occupancy hints.
         auto occupancy = channel_page.occupancy.load(std::memory_order_relaxed);
-        if (~occupancy == 0U) {
+        if (~occupancy == 0U)
             // Everything is occupied, which is very unlikely.
             continue;
-        }
 
         for (std::size_t index{0U}; (index = std::countr_one(occupancy)) < std::numeric_limits<std::uint64_t>::digits;
              occupancy |= (1U << index)) {
             auto& sample = channel_page[index];
             std::uint64_t expected_count{0U};
             constexpr std::uint64_t kDesiredCount{1U};
-            if (sample.ref_count.compare_exchange_strong(expected_count, kDesiredCount, std::memory_order_relaxed)) {
+            if (sample.ref_count.compare_exchange_strong(expected_count, kDesiredCount, std::memory_order_relaxed))
                 // The hint for this sample was racy.
                 continue;
-            }
 
             // The sample is ours now.
             // Bump the seq id now but do not stamp,
@@ -230,9 +228,8 @@ void Writer::submit(Sample sample_handle) {
 
     // If refcount is zero, hint that the previous latest sample is not being
     // used.
-    if (count == 1U) {
+    if (count == 1U)
         channel_page.occupancy.fetch_xor(1U << previous_index, std::memory_order_relaxed);
-    }
 }
 
 } // namespace fastipc
