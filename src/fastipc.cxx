@@ -3,6 +3,7 @@
 
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cassert>
 #include <chrono>
 #include <cstddef>
@@ -170,7 +171,7 @@ auto Writer::prepare() -> Sample {
             continue;
         }
 
-        for (std::size_t index{0U}; (index = __builtin_ctzll(~occupancy)) < std::numeric_limits<std::uint64_t>::digits;
+        for (std::size_t index{0U}; (index = std::countr_one(occupancy)) < std::numeric_limits<std::uint64_t>::digits;
              occupancy |= (1U << index)) {
             auto& sample = channel_page[index];
             std::uint64_t expected_count{0U};
