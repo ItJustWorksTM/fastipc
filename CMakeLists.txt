@@ -19,10 +19,21 @@ include (CMake/Modules/Common.cmake)
 
 add_library (fastipc STATIC)
 target_include_directories (fastipc PUBLIC include)
-target_sources (fastipc PRIVATE include/fastipc.hxx src/io/result.hxx src/io/fd.hxx src/fastipc.cxx src/channel.hxx)
+target_sources (
+    fastipc
+    PRIVATE include/fastipc.hxx
+            src/io/result.hxx
+            src/io/fd.hxx
+            src/io/addr.hxx
+            src/io/addr.cxx
+            src/io/endian.hxx
+            src/fastipc.cxx
+            src/channel.hxx
+)
 if (NOT DEFINED CMAKE_CXX_CLANG_TIDY OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     target_precompile_headers (fastipc PUBLIC include/fastipc.hxx)
 endif ()
+
 target_compile_features (fastipc INTERFACE cxx_std_17)
 target_compile_features (fastipc PRIVATE cxx_std_23)
 target_compile_options (fastipc PRIVATE ${FASTIPC_COMPILE_OPTIONS} -Wno-zero-length-array)
