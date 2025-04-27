@@ -1,0 +1,25 @@
+name: Check Formatting
+on: [push, pull_request]
+jobs:
+  cmake-formatting-check:
+    name: CMake
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch CMakeFormat 
+        run: pip install cmakelang
+      - run: git config include.path ../.gitconfig
+      - run: git cmake-format
+
+  cxx-formatting-check:
+    name: C++
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Fetch ClangFormat
+      run: |
+          sudo wget -O /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
+          sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc) main"
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-format
+    - run: git config include.path ../.gitconfig
+    - run: git clang-format
