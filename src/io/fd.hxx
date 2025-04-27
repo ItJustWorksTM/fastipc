@@ -21,7 +21,7 @@ class Fd final {
 
     constexpr Fd(Fd&& it) noexcept : Fd{std::exchange(it.m_fd, -1)} {}
     constexpr Fd& operator=(Fd&& rhs) noexcept {
-        auto tmp = Fd{std::move(rhs)};
+        auto tmp = std::move(rhs);
 
         std::swap(tmp.m_fd, m_fd);
 

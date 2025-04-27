@@ -6,7 +6,11 @@
     configure = "!\
         export GIT_ROOT=$(git rev-parse --show-toplevel); \
         configure() { \
-            cmake -S ${GIT_ROOT} -B build $@; \
+            cmake \
+                -S ${GIT_ROOT} \
+                -B build \
+                -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+                $@; \
         }; \
         configure \
     "
@@ -14,7 +18,9 @@
     build = "!\
         export GIT_ROOT=$(git rev-parse --show-toplevel); \
         build() { \
-            cmake --build ${GIT_ROOT}/build $@; \
+            cmake \
+                --build ${GIT_ROOT}/build \
+                $@; \
         }; \
         git configure && \
         build \
@@ -23,7 +29,10 @@
     test = "!\
         export GIT_ROOT=$(git rev-parse --show-toplevel); \
         test() { \
-            ctest --output-on-failure $@ --test-dir ${GIT_ROOT}/build; \
+            ctest \
+                --output-on-failure \
+                $@ \
+                --test-dir ${GIT_ROOT}/build; \
         }; \
         git build && \
         test \
@@ -36,10 +45,45 @@
         export GIT_ROOT=$(git rev-parse --show-toplevel); \
         git ls-files ${GIT_ROOT} \
         | grep -e CMakeLists.txt -e '.cmake$' \
-        | xargs cmake-format -i\
+        | xargs cmake-format -i \
     "
 
     format = "!\
         git cmake-format && \
         git clang-format --force --quiet \
+    "
+
+    # ======== Everything ========
+
+    # cmake-lint can be installed as follows: pip install cmakelang
+    cmake-lint = "!\
+        export GIT_ROOT=$(git rev-parse --show-toplevel); \
+        output=$( \
+            git ls-files ${GIT_ROOT} \
+            | grep -e CMakeLists.txt -e '.cmake$' \
+            | xargs cmake-lint \
+        ); \
+        result=$?; \
+        [ $result -eq 0 ] || echo \"$output\"; \
+        exit $result \
+    "
+
+    clang-tidy = "!\
+        export GIT_ROOT=$(git rev-parse --show-toplevel); \
+        git configure -DCMAKE_CXX_CLANG_TIDY=\"${CLANG_TIDY:-clang-tidy};-use-color=true\" && \
+        cmake --build ${GIT_ROOT}/build --target all \
+    "
+
+    lint = "!\
+        git cmake-lint && \
+        git clang-tidy \
+    "
+
+    # ======== * ========
+
+    pre-push = "!\
+        git format && \
+        git build && \
+        git lint && \
+        git test \
     "

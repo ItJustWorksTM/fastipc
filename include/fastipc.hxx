@@ -33,6 +33,7 @@ class Reader final {
     Reader& operator=(Reader&& from) & noexcept {
         auto other = std::move(from);
         std::swap(m_shadow, other.m_shadow);
+        return *this;
     }
     ~Reader() noexcept;
 
@@ -74,6 +75,7 @@ class Writer final {
     Writer& operator=(Writer&& from) & noexcept {
         auto other = std::move(from);
         std::swap(m_shadow, other.m_shadow);
+        return *this;
     }
     ~Writer() noexcept;
 
