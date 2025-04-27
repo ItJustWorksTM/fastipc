@@ -1,6 +1,7 @@
-# To include this config to the repository, run: git config include.path ../.gitconfig 
+# To include this config to the repository, run: git config include.path ../.gitconfig
 
 [alias]
+    # cmake-format can be installed as follows: pip install cmakelang
     cmake-format = "!\
         git ls-files $(git rev-parse --show-toplevel) \
         | grep -e CMakeLists.txt -e '.cmake$' \
