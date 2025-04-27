@@ -87,6 +87,6 @@
     pre-push = "!\
         git format && \
         git build && \
-        git lint && \
-        git test \
+        git test && \
+        git lint \
     "

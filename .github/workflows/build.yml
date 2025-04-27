@@ -49,12 +49,12 @@ jobs:
             -DCMAKE_LINK_WHAT_YOU_USE=True
       - name: Build
         run: git build
+      - name: Test
+        env:
+          CTEST_NO_TESTS_ACTION: error
+        run: git test
       - name: Lint
         if: matrix.toolchain.name == 'Clang/LLVM'
         env:
           CLANG_TIDY: clang-tidy-20
         run: git clang-tidy
-      - name: Test
-        env:
-          CTEST_NO_TESTS_ACTION: error
-        run: git test
