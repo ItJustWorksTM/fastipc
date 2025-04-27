@@ -3,6 +3,7 @@ Checks:          'bugprone-*,clang-analyzer-*,clang-diagnostic-*,concurrency-*,c
 WarningsAsErrors: '*'
 HeaderFilterRegex: '^(?!build/).*$'
 FormatStyle:     none
+UseColor: true
 CheckOptions:
   - key:             bugprone-argument-comment.StrictMode
     value:           '0'
