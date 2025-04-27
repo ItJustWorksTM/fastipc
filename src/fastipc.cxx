@@ -7,6 +7,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -15,7 +16,6 @@
 #include <span>
 #include <string_view>
 #include <thread>
-#include <utility>
 
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -50,7 +50,7 @@ void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request)
 
     ::sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
-    constexpr char kPath[] = "fastipcd";
+    constexpr char kPath[] = "fastipcd"; // NOLINT(*-c-arrays)
     static_assert(sizeof(kPath) <= sizeof(addr.sun_path));
     std::memcpy(addr.sun_path, kPath, sizeof(kPath));
 
@@ -58,7 +58,7 @@ void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request)
     expect(io::sysCheck(::connect(sockfd.fd(), reinterpret_cast<const ::sockaddr*>(&addr), sizeof(addr))),
            "failed to connect to tower");
 
-    std::array<std::byte, 128u> buf{};
+    std::array<std::byte, 128u> buf{}; // NOLINT(*-magic-numbers)
 
     std::span<std::byte> sndbuf{buf};
     writeClientRequest(sndbuf, request);
@@ -71,7 +71,7 @@ void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request)
     int memfd{-1};
     ::msghdr msg{};
 
-    ::iovec iov{&total_size, sizeof(total_size)};
+    ::iovec iov{.iov_base = &total_size, .iov_len = sizeof(total_size)};
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
@@ -110,7 +110,8 @@ auto Reader::Sample::getPayload() const -> const void* { return +static_cast<con
 
 Reader::Reader(std::string_view channel_name, std::size_t max_payload_size)
     : m_shadow{[=]() {
-          auto& channel = connect({RequesterType::Reader, max_payload_size, channel_name});
+          auto& channel = connect(
+              {.type = RequesterType::Reader, .max_payload_size = max_payload_size, .topic_name = channel_name});
           assert(channel.max_payload_size == max_payload_size);
           return static_cast<void*>(&channel);
       }()} {}
@@ -167,7 +168,8 @@ auto Writer::Sample::getPayload() -> void* { return +static_cast<ChannelSample*>
 
 Writer::Writer(std::string_view channel_name, std::size_t max_payload_size)
     : m_shadow{[=]() {
-          auto& channel = connect({RequesterType::Writer, max_payload_size, channel_name});
+          auto& channel = connect(
+              {.type = RequesterType::Writer, .max_payload_size = max_payload_size, .topic_name = channel_name});
           std::println("channel sample size: {}", channel.max_payload_size);
 
           assert(channel.max_payload_size == max_payload_size);
@@ -191,6 +193,7 @@ auto Writer::prepare() -> Sample {
             // Everything is occupied, which is very unlikely.
             continue;
 
+        // NOLINTNEXTLINE(altera-id-dependent-backward-branch,altera-unroll-loops) Let's benchmark first
         for (std::size_t index{0U}; (index = std::countr_one(occupancy)) < std::numeric_limits<std::uint64_t>::digits;
              occupancy |= (1U << index)) {
             auto& sample = channel_page[index];

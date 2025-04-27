@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <expected>
 #include <iostream>
 #include <system_error>
@@ -13,7 +14,9 @@ using unexpected = std::unexpected<std::error_code>;
 
 [[nodiscard]] inline std::error_code errnoCode() noexcept { return std::error_code{errno, std::system_category()}; }
 
-[[nodiscard]] inline io::expected<int> sysVal(int val) noexcept {
+template <std::integral T>
+    requires std::is_signed_v<T>
+[[nodiscard]] io::expected<int> sysVal(T val) noexcept {
     if (val < 0) {
         return io::unexpected{errnoCode()};
     }
@@ -29,7 +32,9 @@ using unexpected = std::unexpected<std::error_code>;
     return val;
 }
 
-[[nodiscard]] inline io::expected<void> sysCheck(int val) noexcept {
+template <std::integral T>
+    requires std::is_signed_v<T>
+[[nodiscard]] io::expected<void> sysCheck(T val) noexcept {
     if (val < 0) {
         return io::unexpected{errnoCode()};
     }

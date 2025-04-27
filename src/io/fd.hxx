@@ -34,7 +34,7 @@ class Fd final {
         }
     }
 
-    [[nodiscard]] constexpr int fd() const noexcept { return m_fd; }
+    [[nodiscard]] constexpr const int& fd() const noexcept { return m_fd; }
 
   private:
     int m_fd{-1};

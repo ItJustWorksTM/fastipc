@@ -7,12 +7,12 @@
 using namespace std::literals;
 
 int main() {
-    fastipc::Writer writer{"channel"sv, 256u};
+    fastipc::Writer writer{"channel"sv, 256u}; // NOLINT(*-magic-numbers)
 
     auto sample = writer.prepare();
 
     std::print("Enter value for seq-id {}: ", sample.getSequenceId());
-    std::cin.getline(static_cast<char*>(sample.getPayload()), 256u);
+    std::cin.getline(static_cast<char*>(sample.getPayload()), 256u); // NOLINT(*-magic-numbers)
 
-    writer.submit(std::move(sample));
+    writer.submit(sample);
 }
