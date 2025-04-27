@@ -36,21 +36,20 @@ jobs:
           ninja --version
           ${{ matrix.toolchain.cc }} --version
           ${{ matrix.toolchain.cxx }} --version
+      - run: git config include.path ../.gitconfig
       - name: CMake configure
         run: |
-          cmake -G Ninja \
+          git configure -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=${{ matrix.toolchain.cc }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.toolchain.cxx }} \
             -DCMAKE_CXX_FLAGS=${{ matrix.toolchain.cxxflags }} \
             -DCMAKE_LINKER_TYPE=${{ matrix.toolchain.ld }} \
             -DCMAKE_EXE_LINKER_FLAGS=${{ matrix.toolchain.ldflags }} \
-            -DCMAKE_LINK_WHAT_YOU_USE=True \
-            -S ./ -B ./build
+            -DCMAKE_LINK_WHAT_YOU_USE=True
       - name: CMake build
-        run: cmake --build ./build
+        run: git build
       - name: CMake test
         env:
-          CTEST_OUTPUT_ON_FAILURE: True
           CTEST_NO_TESTS_ACTION: error
-        run: cmake --build ./build --target test
+        run: git test
