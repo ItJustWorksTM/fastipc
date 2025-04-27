@@ -8,7 +8,7 @@
 int main() {
 
     auto tower = fastipc::Tower::create("fastipcd");
-    std::jthread tower_thread{[&] { tower.run(); }};
+    const std::jthread tower_thread{[&] { tower.run(); }};
 
     constexpr std::string_view channel_name{"Hallowed are the Ori"};
     constexpr std::size_t max_payload_size{sizeof(int)};
@@ -19,21 +19,21 @@ int main() {
     {
         auto sample = reader.acquire();
         assert(sample.getSequenceId() == 0);
-        reader.release(std::move(sample));
+        reader.release(sample);
     }
 
     {
         auto sample = writer.prepare();
         assert(sample.getSequenceId() == 1);
-        *static_cast<int*>(sample.getPayload()) = 5;
-        writer.submit(std::move(sample));
+        *static_cast<int*>(sample.getPayload()) = 5; // NOLINT(*-magic-numbers)
+        writer.submit(sample);
     }
 
     {
         auto sample = reader.acquire();
         assert(sample.getSequenceId() == 1);
         assert(*static_cast<const int*>(sample.getPayload()) == 5);
-        reader.release(std::move(sample));
+        reader.release(sample);
     }
 
     tower.shutdown();

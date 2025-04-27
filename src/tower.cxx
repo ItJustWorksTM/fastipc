@@ -1,9 +1,11 @@
 #include "tower.hxx"
 
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <csignal>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <limits>
@@ -11,6 +13,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -36,9 +39,9 @@ namespace {
     assert(requester_type < 2);
 
     return {
-        static_cast<RequesterType>(requester_type),
-        max_payload_size,
-        {reinterpret_cast<const char*>(topic_name_buf.data()), topic_name_buf.size()},
+        .type = static_cast<RequesterType>(requester_type),
+        .max_payload_size = max_payload_size,
+        .topic_name = {reinterpret_cast<const char*>(topic_name_buf.data()), topic_name_buf.size()},
     };
 }
 } // namespace
@@ -67,6 +70,7 @@ namespace {
 }
 
 void Tower::run() {
+    // NOLINTNEXTLINE(altera-unroll-loops) Service loops should not be unrolled
     for (;;) {
         auto expected_clientfd = io::adoptSysFd(::accept(m_sockfd.fd(), nullptr, nullptr));
         if (!expected_clientfd.has_value()) {
@@ -84,7 +88,7 @@ void Tower::run() {
 void Tower::shutdown() { expect(io::sysCheck(::shutdown(m_sockfd.fd(), SHUT_RD)), "Failed to shutdown tower socket"); }
 
 void Tower::serve(io::Fd clientfd) {
-    std::array<std::byte, 128u> buf{};
+    std::array<std::byte, 128u> buf{}; // NOLINT(*-magic-numbers)
     const auto bytes_read =
         expect(io::sysVal(::read(clientfd.fd(), buf.data(), buf.size())), "failed to read from client");
 
@@ -104,6 +108,7 @@ void Tower::serve(io::Fd clientfd) {
 
         channel.total_size = impl::ChannelPage::total_size(request.max_payload_size);
 
+        // NOLINTNEXTLINE(*-narrowing-conversions)
         expect(io::sysCheck(::ftruncate(channel.memfd.fd(), channel.total_size)), "failed to truncate channel memory");
 
         void* ptr = expect(
@@ -116,15 +121,16 @@ void Tower::serve(io::Fd clientfd) {
         channel.page->next_seq_id.store(1U, std::memory_order_relaxed);
         channel.page->occupancy.store(1U << 0U, std::memory_order_relaxed);
 
+        // NOLINTNEXTLINE(altera-unroll-loops) This shouldn't be unrolled as much as optimized away
         for (std::size_t i{0U}; i < std::numeric_limits<std::uint64_t>::digits; ++i) {
-            ::new (channel.page->samples_storage + i * (sizeof(impl::ChannelSample) + request.max_payload_size))
+            ::new (channel.page->samples_storage + (i * (sizeof(impl::ChannelSample) + request.max_payload_size)))
                 impl::ChannelSample;
         }
     }
 
     ::msghdr msg{};
 
-    ::iovec iov{static_cast<void*>(&channel.total_size), sizeof(channel.total_size)};
+    ::iovec iov{.iov_base = static_cast<void*>(&channel.total_size), .iov_len = sizeof(channel.total_size)};
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
@@ -133,10 +139,10 @@ void Tower::serve(io::Fd clientfd) {
     msg.msg_controllen = ctrl.size();
 
     auto* const cmsg = CMSG_FIRSTHDR(&msg);
-    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_level = SOL_SOCKET; // NOLINT(misc-include-cleaner) false-positive
     cmsg->cmsg_type = SCM_RIGHTS;
-    cmsg->cmsg_len = CMSG_LEN(sizeof(channel.memfd));
-    std::memcpy(CMSG_DATA(cmsg), &channel.memfd, sizeof(channel.memfd));
+    cmsg->cmsg_len = CMSG_LEN(sizeof(channel.memfd.fd()));
+    std::memcpy(CMSG_DATA(cmsg), &channel.memfd.fd(), sizeof(channel.memfd));
     msg.msg_controllen = cmsg->cmsg_len;
 
     static_cast<void>(expect(io::sysVal(::sendmsg(clientfd.fd(), &msg, 0)), "failed to send reply to client"));

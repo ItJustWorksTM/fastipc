@@ -6,7 +6,7 @@
 using namespace std::literals;
 
 int main() {
-    fastipc::Reader reader{"channel"sv, 256u};
+    fastipc::Reader reader{"channel"sv, 256u}; // NOLINT(*-magic-numbers)
 
     auto sample = reader.acquire();
 
