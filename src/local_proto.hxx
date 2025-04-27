@@ -11,6 +11,7 @@ enum class RequesterType : std::uint8_t {
     Writer = 1,
 };
 
+// NOLINTNEXTLINE(altera-struct-pack-align)
 struct ClientRequest {
     RequesterType type;
     std::size_t max_payload_size;

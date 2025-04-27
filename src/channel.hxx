@@ -4,21 +4,21 @@
 #include <chrono>
 #include <cstddef>
 
-namespace fastipc {
+namespace fastipc::impl {
 
-namespace impl {
-
+// NOLINTNEXTLINE(altera-struct-pack-align)
 struct ChannelSample final {
     std::atomic_size_t ref_count{0U};
     std::size_t sequence_id{0U};
     std::size_t size{0U};
-    std::chrono::system_clock::time_point timestamp{};
+    std::chrono::system_clock::time_point timestamp;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
-    std::byte payload[0];
+    std::byte payload[0]; // NOLINT(*-c-arrays)
 #pragma GCC diagnostic pop
 };
 
+// NOLINTNEXTLINE(altera-struct-pack-align)
 struct ChannelPage final {
     std::size_t max_payload_size{0U};
     std::atomic_size_t next_seq_id{0U};
@@ -26,7 +26,7 @@ struct ChannelPage final {
     std::atomic_size_t latest_sample_index{0U};
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
-    alignas(ChannelSample) std::byte samples_storage[0];
+    alignas(ChannelSample) std::byte samples_storage[0]; // NOLINT(*-c-arrays)
 #pragma GCC diagnostic pop
 
     [[nodiscard]] std::size_t sample_size() const { return sizeof(ChannelSample) + max_payload_size; }
@@ -43,9 +43,8 @@ struct ChannelPage final {
 
     [[nodiscard]] constexpr static std::size_t total_size(std::size_t max_payload_size) noexcept {
         return sizeof(ChannelPage) +
-               std::numeric_limits<std::uint64_t>::digits * (sizeof(ChannelSample) + max_payload_size);
+               (std::numeric_limits<std::uint64_t>::digits * (sizeof(ChannelSample) + max_payload_size));
     }
 };
 
-} // namespace impl
-} // namespace fastipc
+} // namespace fastipc::impl

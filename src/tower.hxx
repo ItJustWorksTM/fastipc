@@ -18,6 +18,7 @@ class Tower final {
     void shutdown();
 
   private:
+    // NOLINTNEXTLINE(altera-struct-pack-align)
     struct ChannelDescriptor final {
         io::Fd memfd;
         std::size_t total_size{0U};

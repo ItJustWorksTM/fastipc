@@ -8,8 +8,7 @@
 
 #include "result.hxx"
 
-namespace fastipc {
-namespace io {
+namespace fastipc::io {
 
 class Fd final {
   public:
@@ -44,5 +43,4 @@ class Fd final {
     return sysVal(fd).transform([](int fd) { return Fd{fd}; });
 }
 
-} // namespace io
-} // namespace fastipc
+} // namespace fastipc::io

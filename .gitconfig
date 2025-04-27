@@ -70,7 +70,7 @@
 
     clang-tidy = "!\
         export GIT_ROOT=$(git rev-parse --show-toplevel); \
-        git configure -DCMAKE_CXX_CLANG_TIDY=\"${CLANG_TIDY:-clang-tidy};-use-color=true\" && \
+        git configure -DCMAKE_CXX_CLANG_TIDY=\"${CLANG_TIDY:-clang-tidy};--header-filter=.*;-use-color=true\" && \
         cmake --build ${GIT_ROOT}/build --target all \
     "
 

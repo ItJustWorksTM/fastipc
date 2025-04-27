@@ -6,8 +6,7 @@
 #include <cstring>
 #include <span>
 
-namespace fastipc {
-namespace io {
+namespace fastipc::io {
 
 template <std::size_t n, std::size_t extent>
 [[nodiscard]] constexpr std::span<const std::byte, n> takeBuf(std::span<const std::byte, extent>& self) noexcept {
@@ -54,5 +53,4 @@ constexpr void putBuf(std::span<std::byte, extent>& self, T value) noexcept {
     putBuf(self, buf);
 }
 
-} // namespace io
-} // namespace fastipc
+} // namespace fastipc::io

@@ -45,7 +45,7 @@ template <std::integral T>
 } // namespace io
 
 template <typename T>
-[[nodiscard]] T expect(std::expected<T, std::error_code>&& expected, std::string_view message = "unexpected") noexcept {
+[[nodiscard]] T expect(std::expected<T, std::error_code> expected, std::string_view message = "unexpected") noexcept {
     if (expected.has_value()) {
         return std::move(expected.value());
     }
@@ -54,7 +54,7 @@ template <typename T>
     std::abort();
 }
 
-inline void expect(std::expected<void, std::error_code>&& expected, std::string_view message = "unexpected") noexcept {
+inline void expect(std::expected<void, std::error_code> expected, std::string_view message = "unexpected") noexcept {
     if (expected.has_value()) {
         return;
     }
