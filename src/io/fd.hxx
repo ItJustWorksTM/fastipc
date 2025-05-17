@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include <cerrno>
+#include <cstddef>
 #include <expected>
 #include <utility>
 
@@ -57,8 +57,20 @@ class Fd final {
     int m_fd{-1};
 };
 
-[[nodiscard]] constexpr io::expected<Fd> adoptSysFd(int fd) noexcept {
+[[nodiscard]] constexpr expected<Fd> adoptSysFd(int fd) noexcept {
     return sysVal(fd).transform([](int fd) { return Fd{fd}; });
+}
+
+[[nodiscard]] inline expected<std::size_t> write(const Fd& fd, std::span<const std::byte> buf) noexcept {
+    return sysVal(::write(fd.fd(), buf.data(), buf.size())).transform([](int written) {
+        return static_cast<std::size_t>(written);
+    });
+}
+
+[[nodiscard]] inline expected<std::size_t> read(const Fd& fd, std::span<std::byte> buf) noexcept {
+    return sysVal(::read(fd.fd(), buf.data(), buf.size())).transform([](int read) {
+        return static_cast<std::size_t>(read);
+    });
 }
 
 } // namespace fastipc::io
