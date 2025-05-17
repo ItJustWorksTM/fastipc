@@ -20,7 +20,7 @@
 
 #include <concepts>
 #include <expected>
-#include <iostream>
+#include <print>
 #include <system_error>
 
 namespace fastipc {
@@ -68,7 +68,7 @@ template <typename T>
         return std::move(expected.value());
     }
 
-    std::cerr << message << ": " << expected.error().message() << "\n" << std::flush;
+    std::println(stderr, "{}: {}", message, expected.error().message());
     std::abort();
 }
 
@@ -77,7 +77,17 @@ inline void expect(std::expected<void, std::error_code> expected, std::string_vi
         return;
     }
 
-    std::cerr << message << ": " << expected.error().message() << "\n" << std::flush;
+    std::println(stderr, "{}: {}", message, expected.error().message());
+    std::abort();
+}
+
+template <typename T>
+[[nodiscard]] T expect(std::optional<T> expected, std::string_view message = "unexpected") noexcept {
+    if (expected.has_value()) {
+        return std::move(expected.value());
+    }
+
+    std::println(stderr, "{}", message);
     std::abort();
 }
 
