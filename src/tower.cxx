@@ -21,12 +21,12 @@
 #include <array>
 #include <atomic>
 #include <cassert>
-#include <csignal>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <print>
 #include <span>
 #include <string>
@@ -49,19 +49,40 @@
 namespace fastipc {
 namespace {
 
-[[nodiscard]] ClientRequest readClientRequest(std::span<const std::byte>& buf) noexcept {
+[[nodiscard]] constexpr io::expected<std::optional<ClientRequest>>
+readClientRequest(std::span<const std::byte>& obuf) noexcept {
+    constexpr static auto kMinSize = 10u;
+
+    auto buf = obuf;
+
+    if (buf.size() < kMinSize) {
+        return {};
+    }
+
     const auto requester_type = io::getBuf<std::underlying_type_t<RequesterType>>(buf);
+
+    if (requester_type >= 2) {
+        return io::unexpected{std::make_error_code(std::errc::protocol_error)};
+    }
+
     const auto max_payload_size = io::getBuf<std::size_t>(buf);
-    const auto topic_name_buf = io::takeBuf(buf, io::getBuf<std::uint8_t>(buf));
+    const auto topic_name_size = io::getBuf<std::uint8_t>(buf);
 
-    assert(requester_type < 2);
+    if (buf.size() < topic_name_size) {
+        return {};
+    }
 
-    return {
+    const auto topic_name_buf = io::takeBuf(buf, topic_name_size);
+
+    obuf = buf;
+
+    return ClientRequest{
         .type = static_cast<RequesterType>(requester_type),
         .max_payload_size = max_payload_size,
         .topic_name = {reinterpret_cast<const char*>(topic_name_buf.data()), topic_name_buf.size()},
     };
 }
+
 } // namespace
 
 [[nodiscard]] Tower Tower::create(std::string_view path) {
@@ -107,11 +128,10 @@ void Tower::shutdown() { expect(io::sysCheck(::shutdown(m_sockfd.fd(), SHUT_RD))
 
 void Tower::serve(io::Fd clientfd) {
     std::array<std::byte, 128u> buf{}; // NOLINT(*-magic-numbers)
-    const auto bytes_read =
-        expect(io::sysVal(::read(clientfd.fd(), buf.data(), buf.size())), "failed to read from client");
+    const auto bytes_read = expect(io::read(clientfd, std::span{buf}), "failed to read from client");
 
-    auto recvbuf = std::span<const std::byte>{buf.data(), static_cast<std::size_t>(bytes_read)};
-    const auto request = readClientRequest(recvbuf);
+    auto recvbuf = std::span<const std::byte>{buf}.first(bytes_read);
+    const auto request = expect(expect(readClientRequest(recvbuf), "invalid request"), "incomplete message");
 
     std::println("{} request for topic '{}' with max payload size of {} bytes.",
                  (request.type == RequesterType::Reader ? "reader" : "writer"), request.topic_name,
