@@ -18,41 +18,55 @@
 
 #include <cassert>
 #include <cstddef>
+#include <print>
 #include <thread>
 
 #include "fastipc.hxx"
 #include "tower.hxx"
 
-int main() {
+#include "co/coroutine.hxx"
+#include "co/task.hxx"
+#include "io/context.hxx"
+#include "io/io_env.hxx"
 
-    auto tower = fastipc::Tower::create("fastipcd");
-    const std::jthread tower_thread{[&] { tower.run(); }};
+namespace {
 
-    constexpr std::string_view channel_name{"Hallowed are the Ori"};
-    constexpr std::size_t max_payload_size{sizeof(int)};
+fastipc::io::Co<void> co_main() {
+    auto tower = co_await fastipc::Tower::create("fastipcd");
 
-    fastipc::Writer writer{channel_name, max_payload_size};
-    fastipc::Reader reader{channel_name, max_payload_size};
+    auto test = std::jthread{[&] {
+        constexpr std::string_view channel_name{"Hallowed are the Ori"};
+        constexpr std::size_t max_payload_size{sizeof(int)};
 
-    {
-        auto sample = reader.acquire();
-        assert(sample.getSequenceId() == 0);
-        reader.release(sample);
-    }
+        fastipc::Writer writer{channel_name, max_payload_size};
+        fastipc::Reader reader{channel_name, max_payload_size};
 
-    {
-        auto sample = writer.prepare();
-        assert(sample.getSequenceId() == 1);
-        *static_cast<int*>(sample.getPayload()) = 5; // NOLINT(*-magic-numbers)
-        writer.submit(sample);
-    }
+        {
+            auto sample = reader.acquire();
+            assert(sample.getSequenceId() == 0);
+            reader.release(sample);
+        }
 
-    {
-        auto sample = reader.acquire();
-        assert(sample.getSequenceId() == 1);
-        assert(*static_cast<const int*>(sample.getPayload()) == 5);
-        reader.release(sample);
-    }
+        {
+            auto sample = writer.prepare();
+            assert(sample.getSequenceId() == 1);
+            *static_cast<int*>(sample.getPayload()) = 5; // NOLINT(*-magic-numbers)
+            writer.submit(sample);
+        }
 
-    tower.shutdown();
+        {
+            auto sample = reader.acquire();
+            assert(sample.getSequenceId() == 1);
+            assert(*static_cast<const int*>(sample.getPayload()) == 5);
+            reader.release(sample);
+        }
+
+        tower.shutdown();
+    }};
+
+    co_await tower.run();
 }
+
+} // namespace
+
+int main() { fastipc::io::context(co_main); }

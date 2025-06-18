@@ -16,9 +16,38 @@
  *
  */
 
+#include "co/task.hxx"
+#include "io/io_env.hxx"
 #include "tower.hxx"
 
+namespace fastipc {
+namespace {
+
+io::Co<int> main() {
+    auto tower = co_await fastipc::Tower::create("fastipcd");
+    co_await tower.run();
+
+    co_return 0;
+}
+
+} // namespace
+} // namespace fastipc
+
 int main() {
-    auto tower = fastipc::Tower::create("fastipcd");
-    tower.run();
+    auto scheduler = fastipc::co::Scheduler{};
+    auto reactor = fastipc::expect(fastipc::io::Reactor::create());
+
+    fastipc::io::Env env{.scheduler = &scheduler, .reactor = &reactor};
+
+    // block on?
+    fastipc::co::spawn(fastipc::main(), env);
+
+    while (scheduler.can_run()) {
+        while (scheduler.can_run()) {
+            scheduler.run();
+            fastipc::expect(reactor.react(std::chrono::milliseconds{0}), "failed to react to io events");
+        }
+
+        fastipc::expect(reactor.react({}), "failed to react to io events");
+    }
 }

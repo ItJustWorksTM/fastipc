@@ -39,6 +39,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include "co/task.hxx"
 
 #include "io/cursor.hxx"
 #include "io/fd.hxx"
@@ -84,7 +85,7 @@ namespace {
 
 } // namespace
 
-[[nodiscard]] Tower Tower::create(std::string_view path) {
+[[nodiscard]] io::Co<Tower> Tower::create(std::string_view path) {
     auto sockfd =
         expect(io::adoptSysFd(::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0)), "failed to create tower socket");
 
@@ -104,10 +105,10 @@ namespace {
     constexpr int kListenQueueSize{128};
     expect(io::sysCheck(::listen(sockfd.fd(), kListenQueueSize)), "failed to listen to tower socket");
 
-    return Tower{std::move(sockfd)};
+    co_return Tower{std::move(sockfd)};
 }
 
-void Tower::run() {
+io::Co<void> Tower::run() {
     // NOLINTNEXTLINE(altera-unroll-loops) Service loops should not be unrolled
     for (;;) {
         auto expected_clientfd = io::adoptSysFd(::accept(m_sockfd.fd(), nullptr, nullptr));
@@ -119,13 +120,14 @@ void Tower::run() {
         }
 
         auto clientfd = expect(std::move(expected_clientfd), "failed to accept incoming connection");
-        serve(std::move(clientfd));
+
+        co_await co::spawn(serve(std::move(clientfd)));
     }
 }
 
 void Tower::shutdown() { expect(io::sysCheck(::shutdown(m_sockfd.fd(), SHUT_RD)), "Failed to shutdown tower socket"); }
 
-void Tower::serve(io::Fd clientfd) {
+io::Co<void> Tower::serve(io::Fd clientfd) {
     std::array<std::byte, 128u> buf{}; // NOLINT(*-magic-numbers)
     const auto bytes_read = expect(io::read(clientfd, std::span{buf}), "failed to read from client");
 
@@ -183,6 +185,8 @@ void Tower::serve(io::Fd clientfd) {
     msg.msg_controllen = cmsg->cmsg_len;
 
     static_cast<void>(expect(io::sysVal(::sendmsg(clientfd.fd(), &msg, 0)), "failed to send reply to client"));
+
+    co_return;
 }
 
 } // namespace fastipc
