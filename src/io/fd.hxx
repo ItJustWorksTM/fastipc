@@ -21,12 +21,18 @@
 #include <cstddef>
 #include <expected>
 #include <utility>
-
+#include <fcntl.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "result.hxx"
 
 namespace fastipc::io {
+
+template <class T>
+concept AsFd = requires(const T& t) {
+    { t.fd() } -> std::same_as<const int&>;
+};
 
 class Fd final {
   public:
@@ -61,15 +67,34 @@ class Fd final {
     return sysVal(fd).transform([](int fd) { return Fd{fd}; });
 }
 
-[[nodiscard]] inline expected<std::size_t> write(const Fd& fd, std::span<const std::byte> buf) noexcept {
+[[nodiscard]] inline expected<std::size_t> write(const AsFd auto& fd, std::span<const std::byte> buf) noexcept {
     return sysVal(::write(fd.fd(), buf.data(), buf.size())).transform([](int written) {
         return static_cast<std::size_t>(written);
     });
 }
 
-[[nodiscard]] inline expected<std::size_t> read(const Fd& fd, std::span<std::byte> buf) noexcept {
+[[nodiscard]] inline expected<std::size_t> read(const AsFd auto& fd, std::span<std::byte> buf) noexcept {
     return sysVal(::read(fd.fd(), buf.data(), buf.size())).transform([](int read) {
         return static_cast<std::size_t>(read);
+    });
+}
+
+inline expected<void> setBlocking(const AsFd auto& fd, bool blocking) noexcept {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
+    return sysVal(::fcntl(fd.fd(), F_GETFL, 0)).and_then([&](auto flags) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
+        return sysCheck(::fcntl(fd.fd(), F_SETFL, blocking ? flags & ~O_NONBLOCK : flags | O_NONBLOCK));
+    });
+}
+
+[[nodiscard]] inline expected<std::pair<Fd, Fd>> makePipe() {
+    std::array<int, 2> raw_fds{};
+
+    return sysCheck(::pipe2(raw_fds.data(), SOCK_CLOEXEC)).transform([&]() {
+        auto read_fd = io::Fd{raw_fds[0]};
+        auto write_fd = io::Fd{raw_fds[1]};
+
+        return std::pair<Fd, Fd>{std::move(read_fd), std::move(write_fd)};
     });
 }
 

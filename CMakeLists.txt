@@ -27,6 +27,12 @@ target_sources (
             src/io/addr.hxx
             src/io/addr.cxx
             src/io/endian.hxx
+            src/io/polled_io.hxx
+            src/io/reactor.hxx
+            src/io/reactor.cxx
+            src/io/io_env.hxx
+            src/co/scheduler.hxx
+            src/co/coroutine.hxx
             src/fastipc.cxx
             src/channel.hxx
 )
