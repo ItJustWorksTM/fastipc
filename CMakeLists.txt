@@ -27,7 +27,16 @@ target_sources (
             src/io/addr.hxx
             src/io/addr.cxx
             src/io/endian.hxx
+            src/io/polled_io.hxx
+            src/io/reactor.hxx
+            src/io/reactor.cxx
+            src/io/io_env.hxx
+            src/io/context.hxx
+            src/co/scheduler.hxx
+            src/co/coroutine.hxx
+            src/co/task.hxx
             src/fastipc.cxx
+            src/visitor.hxx
             src/channel.hxx
 )
 if (NOT DEFINED CMAKE_CXX_CLANG_TIDY OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")

@@ -23,16 +23,16 @@
 #include <unordered_map>
 
 #include "io/fd.hxx"
+#include "io/io_env.hxx"
 #include "channel.hxx"
 
 namespace fastipc {
 
 class Tower final {
   public:
-    [[nodiscard]] static Tower create(std::string_view path);
+    [[nodiscard]] static io::Co<Tower> create(std::string_view path);
 
-    void run();
-
+    io::Co<void> run();
     void shutdown();
 
   private:
@@ -45,7 +45,7 @@ class Tower final {
 
     explicit Tower(io::Fd sockfd) noexcept : m_sockfd{std::move(sockfd)} {}
 
-    void serve(io::Fd clientfd);
+    io::Co<void> serve(io::Fd clientfd);
 
     io::Fd m_sockfd;
     std::unordered_map<std::string, ChannelDescriptor> m_channels;
