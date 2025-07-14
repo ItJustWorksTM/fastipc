@@ -20,7 +20,6 @@
 
 #include <array>
 #include <atomic>
-#include <bit>
 #include <cassert>
 #include <chrono>
 #include <cstddef>
@@ -28,11 +27,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <limits>
 #include <print>
 #include <span>
 #include <string_view>
-#include <thread>
 
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -47,8 +44,6 @@
 
 namespace fastipc {
 
-using namespace impl;
-
 namespace {
 
 void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request) noexcept {
@@ -61,7 +56,7 @@ void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request)
     io::putBuf(buf, topic_name_buf);
 }
 
-[[nodiscard]] ChannelPage& connect(const ClientRequest& request) {
+[[nodiscard]] impl::ChannelPage& connect(const ClientRequest& request) {
     const auto sockfd =
         expect(io::adoptSysFd(::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0)), "failed to create client socket");
 
@@ -105,25 +100,27 @@ void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request)
     void* ptr = expect(io::sysVal(::mmap(nullptr, total_size, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, 0)),
                        "failed to mmap channel memory");
 
-    return *static_cast<ChannelPage*>(ptr);
+    return *static_cast<impl::ChannelPage*>(ptr);
 }
 
-void disconnect(ChannelPage& channel_page) {
-    expect(io::sysCheck(::munmap(&channel_page, ChannelPage::total_size(channel_page.max_payload_size))),
+void disconnect(impl::ChannelPage& channel_page) {
+    expect(io::sysCheck(::munmap(&channel_page, impl::ChannelPage::total_size(channel_page.max_payload_size))),
            "Failed to munmap channel memory");
 }
 
 } // namespace
 
 auto Reader::Sample::getSequenceId() const -> std::uint64_t {
-    return static_cast<const ChannelSample*>(m_shadow)->sequence_id;
+    return static_cast<const impl::ChannelSample*>(m_shadow)->sequence_id;
 }
 
 auto Reader::Sample::getTimestamp() const -> std::chrono::system_clock::time_point {
-    return static_cast<const ChannelSample*>(m_shadow)->timestamp;
+    return static_cast<const impl::ChannelSample*>(m_shadow)->timestamp;
 }
 
-auto Reader::Sample::getPayload() const -> const void* { return +static_cast<const ChannelSample*>(m_shadow)->payload; }
+auto Reader::Sample::getPayload() const -> const void* {
+    return +static_cast<const impl::ChannelSample*>(m_shadow)->payload;
+}
 
 Reader::Reader(std::string_view channel_name, std::size_t max_payload_size)
     : m_shadow{[=]() {
@@ -137,51 +134,34 @@ Reader::~Reader() noexcept {
     if (m_shadow == nullptr)
         return;
 
-    disconnect(*static_cast<ChannelPage*>(m_shadow));
+    disconnect(*static_cast<impl::ChannelPage*>(m_shadow));
     m_shadow = nullptr;
 }
 
 bool Reader::hasNewData(std::uint64_t sequence_id) const {
-    const auto& channel_page = *static_cast<const ChannelPage*>(m_shadow);
-    const auto index = channel_page.latest_sample_index.load(std::memory_order_relaxed);
-    const auto& sample = channel_page[index];
-
-    return sample.sequence_id > sequence_id;
+    const auto& page = *static_cast<const impl::ChannelPage*>(m_shadow);
+    return impl::hasNewData(page, sequence_id);
 }
 
 auto Reader::acquire() -> Sample {
-    auto& channel_page = *static_cast<ChannelPage*>(m_shadow);
-    const auto index = channel_page.latest_sample_index.load(std::memory_order_relaxed);
-    auto& sample = channel_page[index];
-
-    // Bump up sample refcount.
-    sample.ref_count.fetch_add(1U, std::memory_order_acquire);
-
-    // Hint that the sample is being used.
-    channel_page.occupancy.fetch_or(1U << index, std::memory_order_relaxed);
+    auto& page = *static_cast<impl::ChannelPage*>(m_shadow);
+    auto& sample = impl::acquire(page);
 
     return Sample{static_cast<void*>(&sample)};
 }
 
 void Reader::release(Sample sample_handle) {
-    auto& channel_page = *static_cast<ChannelPage*>(m_shadow);
-    auto& sample = *static_cast<ChannelSample*>(sample_handle.m_shadow);
+    auto& page = *static_cast<impl::ChannelPage*>(m_shadow);
+    auto& sample = *static_cast<impl::ChannelSample*>(sample_handle.m_shadow);
 
-    // Bump down refcount.
-    const auto count = sample.ref_count.fetch_sub(1U, std::memory_order_relaxed);
-
-    // If refcount is zero, hint that the sample is not being used.
-    if (count == 1U) {
-        const auto index = channel_page.index_of(sample);
-        channel_page.occupancy.fetch_xor(1U << index, std::memory_order_relaxed);
-    }
+    impl::release(page, sample);
 }
 
 auto Writer::Sample::getSequenceId() const -> std::uint64_t {
-    return static_cast<const ChannelSample*>(m_shadow)->sequence_id;
+    return static_cast<const impl::ChannelSample*>(m_shadow)->sequence_id;
 }
 
-auto Writer::Sample::getPayload() -> void* { return +static_cast<ChannelSample*>(m_shadow)->payload; }
+auto Writer::Sample::getPayload() -> void* { return +static_cast<impl::ChannelSample*>(m_shadow)->payload; }
 
 Writer::Writer(std::string_view channel_name, std::size_t max_payload_size)
     : m_shadow{[=]() {
@@ -197,59 +177,29 @@ Writer::~Writer() noexcept {
     if (m_shadow == nullptr)
         return;
 
-    disconnect(*static_cast<ChannelPage*>(m_shadow));
+    disconnect(*static_cast<impl::ChannelPage*>(m_shadow));
     m_shadow = nullptr;
 }
 
 auto Writer::prepare() -> Sample {
-    auto& channel_page = *static_cast<ChannelPage*>(m_shadow);
-    for (;; std::this_thread::yield()) {
-        // Read occupancy hints.
-        auto occupancy = channel_page.occupancy.load(std::memory_order_relaxed);
-        if (~occupancy == 0U)
-            // Everything is occupied, which is very unlikely.
-            continue;
+    auto& page = *static_cast<impl::ChannelPage*>(m_shadow);
+    auto& sample = impl::prepare(page);
 
-        // NOLINTNEXTLINE(altera-id-dependent-backward-branch,altera-unroll-loops) Let's benchmark first
-        for (std::size_t index{0U}; (index = std::countr_one(occupancy)) < std::numeric_limits<std::uint64_t>::digits;
-             occupancy |= (1U << index)) {
-            auto& sample = channel_page[index];
-            std::uint64_t expected_count{0U};
-            constexpr std::uint64_t kDesiredCount{1U};
-            if (sample.ref_count.compare_exchange_strong(expected_count, kDesiredCount, std::memory_order_relaxed))
-                // The hint for this sample was racy.
-                continue;
+    // Bump the seq id now but do not stamp,
+    // thus making writer races visible from logs.
+    sample.sequence_id = page.next_seq_id.fetch_add(1U, std::memory_order_relaxed);
 
-            // The sample is ours now.
-            // Bump the seq id now but do not stamp,
-            // thus making writer races visible from logs.
-            sample.sequence_id = channel_page.next_seq_id.fetch_add(1U, std::memory_order_relaxed);
-            return Sample{static_cast<void*>(&sample)};
-        }
-        // Everything is occupied and all hints were racy,
-        // which is very much unlikely.
-    }
+    return Sample{static_cast<void*>(&sample)};
 }
 
 void Writer::submit(Sample sample_handle) {
-    auto& channel_page = *static_cast<ChannelPage*>(m_shadow);
-    auto& sample = *static_cast<ChannelSample*>(sample_handle.m_shadow);
+    auto& page = *static_cast<impl::ChannelPage*>(m_shadow);
+    auto& sample = *static_cast<impl::ChannelSample*>(sample_handle.m_shadow);
 
     // Timestamp the sample
     sample.timestamp = std::chrono::system_clock::now();
 
-    // Update latest sample index
-    const auto index = channel_page.index_of(sample);
-    const auto previous_index = channel_page.latest_sample_index.exchange(index, std::memory_order_release);
-
-    // Bump down previous sample's refcount.
-    auto& previous_sample = channel_page[previous_index];
-    const auto count = previous_sample.ref_count.fetch_sub(1U, std::memory_order_relaxed);
-
-    // If refcount is zero, hint that the previous latest sample is not being
-    // used.
-    if (count == 1U)
-        channel_page.occupancy.fetch_xor(1U << previous_index, std::memory_order_relaxed);
+    impl::submit(page, sample);
 }
 
 } // namespace fastipc
