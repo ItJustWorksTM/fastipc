@@ -21,13 +21,14 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 
 namespace fastipc::impl {
 
 // NOLINTNEXTLINE(altera-struct-pack-align)
 struct ChannelSample final {
     std::atomic_size_t ref_count{0U};
-    std::size_t sequence_id{0U};
+    std::uint64_t sequence_id{0U};
     std::size_t size{0U};
     std::chrono::system_clock::time_point timestamp;
 #pragma GCC diagnostic push
@@ -39,7 +40,7 @@ struct ChannelSample final {
 // NOLINTNEXTLINE(altera-struct-pack-align)
 struct ChannelPage final {
     std::size_t max_payload_size{0U};
-    std::atomic_size_t next_seq_id{0U};
+    std::atomic_uint64_t next_seq_id{0U};
     std::atomic_uint64_t occupancy{0U};
     std::atomic_size_t latest_sample_index{0U};
 #pragma GCC diagnostic push
@@ -64,5 +65,15 @@ struct ChannelPage final {
                (std::numeric_limits<std::uint64_t>::digits * (sizeof(ChannelSample) + max_payload_size));
     }
 };
+
+bool hasNewData(const ChannelPage& page, std::uint64_t sequence_id);
+
+auto acquire(ChannelPage& page) -> ChannelSample&;
+
+void release(ChannelPage& page, ChannelSample& sample);
+
+auto prepare(ChannelPage& page) -> ChannelSample&;
+
+void submit(ChannelPage& page, ChannelSample& sample);
 
 } // namespace fastipc::impl

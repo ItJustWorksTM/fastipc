@@ -29,6 +29,7 @@ target_sources (
             src/io/endian.hxx
             src/fastipc.cxx
             src/channel.hxx
+            src/channel.cxx
 )
 if (NOT DEFINED CMAKE_CXX_CLANG_TIDY OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     target_precompile_headers (fastipc PUBLIC include/fastipc.hxx)
