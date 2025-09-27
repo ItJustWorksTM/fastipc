@@ -24,16 +24,19 @@
 #include "fastipc.hxx"
 #include "tower.hxx"
 
-#include "co/coroutine.hxx"
 #include "co/task.hxx"
 #include "io/context.hxx"
 #include "io/io_env.hxx"
 
 namespace {
 
-fastipc::io::Co<void> co_main() {
+fastipc::io::Co<int> co_main() {
     auto tower = co_await fastipc::Tower::create("fastipcd");
 
+    std::println("starting run task");
+    auto handle = co_await fastipc::co::spawn(tower.run());
+
+    std::println("starting test thread");
     auto test = std::jthread{[&] {
         constexpr std::string_view channel_name{"Hallowed are the Ori"};
         constexpr std::size_t max_payload_size{sizeof(int)};
@@ -61,10 +64,17 @@ fastipc::io::Co<void> co_main() {
             reader.release(sample);
         }
 
-        tower.shutdown();
+        // tower.shutdown();
+        std::println("test done. stopping handle");
+        handle.abort();
     }};
 
-    co_await tower.run();
+    std::println("waiting for complete");
+    co_await handle;
+
+    std::println("run done!");
+
+    co_return 0; // too lazy for void
 }
 
 } // namespace

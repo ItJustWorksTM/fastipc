@@ -1,5 +1,5 @@
 /*
- *  polled_io.hxx
+ *  polled_fd.hxx
  *  Copyright 2025 ItJustWorksTM
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,13 @@
 
 #pragma once
 
+#include <cassert>
+#include <chrono>
 #include <coroutine>
+#include <optional>
+#include <print>
+#include <stop_token>
+#include <thread>
 #include "co/coroutine.hxx"
 #include "io/io_env.hxx"
 #include "fd.hxx"
@@ -79,61 +85,118 @@ class TryIoAwaiter final {
     void await_suspend(std::coroutine_handle<Promise<T>> cont) {
         m_cont = cont;
         m_env = &cont.promise().env();
+        std::stop_token st = cont.promise().stop_token();
 
-        m_env->scheduler->schedule([this]() { poll(); });
+        if (st.stop_requested()) {
+
+            set_stopped();
+            return;
+        }
+
+        m_stop_fn.emplace(std::move(st), StopFn{this});
+
+        schedule_poll();
     }
 
     value_type await_resume() noexcept { return std::move(m_value).value(); }
 
   private:
     void poll() {
+        if (stop_requested) {
+            std::println("stop request so we set_stopped!");
+            set_stopped();
+            return;
+        }
+
+        // POSSIBLE RACE CONDITION
+        // stop_request set to true, but in flight, set new reactor callback, ignore stop..
+
         auto res = m_io();
 
         if (!res.has_value()) {
             if (res.error() == std::errc::operation_would_block ||
                 res.error() == std::errc::resource_unavailable_try_again) {
 
-                auto& registration = *m_fd->m_registration;
-                auto& cb = m_direction == io::Direction::Read ? registration.read_cb : registration.write_cb;
-
-                cb = [this]() { m_env->scheduler->schedule([this]() { poll(); }); };
+                state = State::Blocked;
+                m_fd->m_registration->callback(m_direction, [this]() { schedule_poll(); });
 
                 return;
             }
         }
 
+        set_value(std::move(res));
+    }
+
+    void set_value(value_type res) {
+        m_stop_fn.reset();
+
         m_value = std::move(res);
 
+        state = State::Done;
         m_env->scheduler->schedule([&]() { m_cont.resume(); });
+    }
+
+    void set_stopped() {
+        m_stop_fn.reset();
+
+        state = State::Done;
+
+        // TODO: propagate, use adapter for that
+        assert(false);
+    }
+
+    void schedule_poll() noexcept {
+        if (state != State::Blocked) {
+            return;
+        }
+        
+        state = State::Flight;
+        m_env->scheduler->schedule([this]() { poll(); });
     }
 
     const io::PolledFd* m_fd;
     io::Direction m_direction;
     F m_io;
 
+    enum class State : std::uint8_t {
+        Blocked,
+        Flight,
+        Done,
+    };
+
+    State state = State::Blocked;
+    bool stop_requested = false;
+
     const Env* m_env = nullptr;
     std::optional<value_type> m_value = {};
     std::coroutine_handle<> m_cont;
+
+    struct StopFn final {
+        TryIoAwaiter* self;
+
+        void operator()() noexcept {
+
+            std::println("TryIoAwaiter::StopFn");
+
+            self->stop_requested = true;
+            self->m_fd->m_registration->callback(self->m_direction, {});
+            // need to interrupt the reactor...
+            expect(self->m_fd->m_reactor->interrupt(), "fuck");
+        }
+    };
+
+    std::optional<std::stop_callback<StopFn>> m_stop_fn;
 };
 
-// [[nodiscard]] inline Co<expected<std::pair<PolledFd, PolledFd>>> makePipeAsync() {
-//     auto make_res = makePipe();
+inline Co<expected<PolledFd>> accept(PolledFd& fd) {
+    auto accepted_fd_res = co_await io::TryIoAwaiter{fd, io::Direction::Read,
+                                                     [&]() { return adoptSysFd(::accept(fd.fd(), nullptr, nullptr)); }};
 
-//     if (make_res.error()) {
-//         co_return unexpected{make_res.error()};
-//     }
+    if (!accepted_fd_res.has_value()) {
+        co_return unexpected{accepted_fd_res.error()};
+    }
 
-//     auto [r, w] = std::move(make_res).value();
-
-//     co_return std::pair<PolledFd, PolledFd>{
-//         co_await PolledFd::create(std::move(r)),
-//         co_await PolledFd::create(std::move(w)),
-//     };
-// }
-
-// auto [read_fd, write_fd] = expect(io::makePipe());
-
-// auto aread_fd = expect(co_await io::PolledFd::create(std::move(read_fd)));
-// auto awrite_fd = expect(co_await io::PolledFd::create(std::move(write_fd)));
+    co_return co_await PolledFd::create(std::move(accepted_fd_res).value());
+}
 
 } // namespace fastipc::io

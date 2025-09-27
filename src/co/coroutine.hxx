@@ -22,15 +22,65 @@
 #include <cassert>
 #include <coroutine>
 #include <exception>
-#include <memory>
 #include <print>
+#include <stop_token>
 #include <type_traits>
 #include <utility>
-#include <variant>
 #include "received.hxx"
-#include "visitor.hxx"
 
 namespace fastipc::co {
+
+template <class T>
+class Receiver {
+  public:
+    Receiver() = default;
+
+    Receiver(Receiver&&) noexcept = default;
+    Receiver& operator=(Receiver&&) noexcept = default;
+
+    Receiver(const Receiver&) noexcept = default;
+    Receiver& operator=(const Receiver&) noexcept = default;
+
+    virtual ~Receiver() = default;
+
+    virtual void set_value(T value) noexcept = 0;
+    virtual void set_exception(std::exception_ptr error) noexcept = 0;
+    virtual void set_stopped() noexcept = 0;
+};
+
+template <>
+class Receiver<void> {
+  public:
+    Receiver() = default;
+
+    Receiver(Receiver&&) noexcept = default;
+    Receiver& operator=(Receiver&&) noexcept = default;
+
+    Receiver(const Receiver&) noexcept = default;
+    Receiver& operator=(const Receiver&) noexcept = default;
+
+    virtual ~Receiver() = default;
+
+    virtual void set_value() noexcept = 0;
+    virtual void set_exception(std::exception_ptr error) noexcept = 0;
+    virtual void set_stopped() noexcept = 0;
+};
+
+class Handler {
+  public:
+    Handler() = default;
+
+    Handler(Handler&&) noexcept = delete;
+    Handler& operator=(Handler&&) noexcept = delete;
+
+    Handler(const Handler&) noexcept = delete;
+    Handler& operator=(const Handler&) noexcept = delete;
+
+    virtual ~Handler() = default;
+
+    virtual void unhandled_exception() noexcept = 0;
+    virtual void unhandled_stopped() noexcept = 0;
+};
 
 template <class T>
 concept valueless = std::is_void_v<T>;
@@ -45,7 +95,7 @@ template <class T, class Env>
 class Task;
 
 template <class Env>
-class EnvAwaiter final {
+class EnvAwaiter {
   public:
     bool await_ready() noexcept { return false; }
 
@@ -62,12 +112,12 @@ class EnvAwaiter final {
     const Env* m_env = nullptr;
 };
 
-struct GetEnv final {};
+struct GetEnv {};
 
 constexpr GetEnv getEnv() noexcept { return {}; }
 
 template <class T, class Env>
-class [[nodiscard]] Co final {
+class [[nodiscard]] Co {
   public:
     using promise_type = Promise<T, Env>;
     using handle_type = std::coroutine_handle<promise_type>;
@@ -104,42 +154,8 @@ class [[nodiscard]] Co final {
     handle_type m_handle;
 };
 
-template <class T>
-class Receiver {
-  public:
-    Receiver() = default;
-
-    Receiver(Receiver&&) noexcept = default;
-    Receiver& operator=(Receiver&&) noexcept = default;
-
-    Receiver(const Receiver&) noexcept = default;
-    Receiver& operator=(const Receiver&) noexcept = default;
-
-    virtual ~Receiver() = default;
-
-    virtual void set_value(T value) noexcept = 0;
-    virtual void set_exception(std::exception_ptr error) noexcept = 0;
-};
-
-template <>
-class Receiver<void> {
-  public:
-    Receiver() = default;
-
-    Receiver(Receiver&&) noexcept = default;
-    Receiver& operator=(Receiver&&) noexcept = default;
-
-    Receiver(const Receiver&) noexcept = default;
-    Receiver& operator=(const Receiver&) noexcept = default;
-
-    virtual ~Receiver() = default;
-
-    virtual void set_value() noexcept = 0;
-    virtual void set_exception(std::exception_ptr error) noexcept = 0;
-};
-
 template <class T, class Env>
-class FinalAwaiter final {
+class FinalAwaiter {
   public:
     bool await_ready() noexcept { return false; }
 
@@ -147,20 +163,16 @@ class FinalAwaiter final {
         assert(completed.promise().m_received.has_value());
         auto& promise = completed.promise();
 
-        return match(
-            std::move(promise.m_cont), [](std::coroutine_handle<> cont) -> std::coroutine_handle<> { return cont; },
-            [&promise](std::shared_ptr<Receiver<T>> receiver) -> std::coroutine_handle<> {
-                std::move(promise.m_received).forward(*receiver);
+        std::move(promise.m_received).forward(*promise.m_cont);
 
-                return std::noop_coroutine();
-            });
+        return std::noop_coroutine();
     }
 
     void await_resume() noexcept {}
 };
 
 template <class T, class Env>
-class Promise final {
+class Promise : public Handler {
   public:
     Promise() = default;
 
@@ -170,7 +182,7 @@ class Promise final {
     Promise(const Promise&) noexcept = delete;
     Promise& operator=(const Promise&) noexcept = delete;
 
-    ~Promise() noexcept = default;
+    ~Promise() noexcept override = default;
 
     Co<T, Env> get_return_object() { return Co<T, Env>{std::coroutine_handle<Promise>::from_promise(*this)}; }
 
@@ -182,7 +194,8 @@ class Promise final {
     }
 
     void return_value(T value) noexcept { m_received.set_value(std::move(value)); }
-    void unhandled_exception() noexcept { m_received.set_exception(std::current_exception()); }
+    void unhandled_exception() noexcept override { m_received.set_exception(std::current_exception()); }
+    void unhandled_stopped() noexcept override { m_received.set_stopped(); }
 
     template <class A>
     decltype(auto) await_transform(A&& awaitable) noexcept {
@@ -192,6 +205,7 @@ class Promise final {
     EnvAwaiter<Env> await_transform(GetEnv) { return EnvAwaiter<Env>{}; }
 
     const Env& env() const { return *m_env; }
+    std::stop_token stop_token() { return m_env->stop_token; }
 
   private:
     friend class Co<T, Env>;
@@ -201,13 +215,13 @@ class Promise final {
 
     Received<T> m_received;
 
-    std::variant<std::coroutine_handle<>, std::shared_ptr<Receiver<T>>> m_cont = std::noop_coroutine();
+    Receiver<T>* m_cont = nullptr;
 
     const Env* m_env;
 };
 
 template <class Env>
-class Promise<void, Env> final {
+class Promise<void, Env> : public Handler {
   public:
     Promise() = default;
 
@@ -217,7 +231,7 @@ class Promise<void, Env> final {
     Promise(const Promise&) noexcept = delete;
     Promise& operator=(const Promise&) noexcept = delete;
 
-    ~Promise() noexcept = default;
+    ~Promise() noexcept override = default;
 
     Co<void, Env> get_return_object() { return Co<void, Env>{std::coroutine_handle<Promise>::from_promise(*this)}; }
 
@@ -229,8 +243,8 @@ class Promise<void, Env> final {
     }
 
     void return_void() noexcept { m_received.set_value(); }
-
-    void unhandled_exception() noexcept { m_received.set_exception(std::current_exception()); }
+    void unhandled_exception() noexcept override { m_received.set_exception(std::current_exception()); }
+    void unhandled_stopped() noexcept override { m_received.set_stopped(); }
 
     template <class A>
     decltype(auto) await_transform(A&& awaitable) noexcept {
@@ -240,6 +254,7 @@ class Promise<void, Env> final {
     EnvAwaiter<Env> await_transform(GetEnv) { return EnvAwaiter<Env>{}; }
 
     const Env& env() const { return *m_env; }
+    std::stop_token stop_token() { return m_env->stop_token; }
 
   private:
     friend class Co<void, Env>;
@@ -248,13 +263,78 @@ class Promise<void, Env> final {
     friend class Task<void, Env>;
 
     Received<void> m_received;
-    std::variant<std::coroutine_handle<>, std::shared_ptr<Receiver<void>>> m_cont = std::noop_coroutine();
+    Receiver<void>* m_cont = nullptr;
 
     const Env* m_env;
 };
 
 template <class T, class Env>
-class [[nodiscard]] CoAwaiter final {
+class CoReceiver : public Receiver<T> {
+  public:
+    CoReceiver() : Receiver<T>{} {}
+    CoReceiver(std::coroutine_handle<> cont, const Env* env) : m_cont{cont}, m_env{env} {}
+
+    void set_value(T value) noexcept override {
+        m_received.set_value(std::move(value));
+
+        m_env->scheduler->schedule([cont = m_cont]() { cont.resume(); });
+    };
+
+    void set_exception(std::exception_ptr error) noexcept override {
+        m_received.set_exception(error);
+
+        m_env->scheduler->schedule([cont = m_cont]() { cont.resume(); });
+    };
+
+    // these also need to be scheduled...
+    void set_stopped() noexcept override { m_received.set_stopped(); };
+
+    T resume() {
+        assert(m_received.has_value());
+
+        return std::move(m_received).consume();
+    }
+
+  private:
+    Received<T> m_received;
+    std::coroutine_handle<> m_cont;
+    const Env* m_env;
+};
+
+template <class Env>
+class CoReceiver<void, Env> : public Receiver<void> {
+  public:
+    CoReceiver() : Receiver<void>{} {}
+    CoReceiver(std::coroutine_handle<> cont, const Env* env) : m_cont{cont}, m_env{env} {}
+
+    void set_value() noexcept override {
+        m_received.set_value();
+
+        m_env->scheduler->schedule([cont = m_cont]() { cont.resume(); });
+    };
+
+    void set_exception(std::exception_ptr error) noexcept override {
+        m_received.set_exception(error);
+
+        m_env->scheduler->schedule([cont = m_cont]() { cont.resume(); });
+    };
+
+    // these also need to be scheduled...
+    void set_stopped() noexcept override { m_received.set_stopped(); };
+
+    void resume() {
+        assert(m_received.has_value());
+        std::move(m_received).consume();
+    }
+
+  private:
+    Received<void> m_received;
+    std::coroutine_handle<> m_cont;
+    const Env* m_env;
+};
+
+template <class T, class Env>
+class [[nodiscard]] CoAwaiter {
   public:
     explicit CoAwaiter(Co<T, Env> co) noexcept : m_co{std::move(co)} {}
 
@@ -270,23 +350,26 @@ class [[nodiscard]] CoAwaiter final {
 
     template <class S>
     std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise<S, Env>> cont) {
-        m_co.m_handle.promise().m_env = &cont.promise().env();
-        m_co.m_handle.promise().m_cont = cont;
+        const auto env = &cont.promise().env();
 
+        m_co.env(env);
+
+        m_receiver = {cont, env};
+        m_co.m_handle.promise().m_cont = &m_receiver;
+
+        // TODO: move to scheduler
         return m_co.m_handle;
     }
 
     T await_resume() {
-        auto co = std::move(m_co);
+        auto _ = std::move(m_co);
 
-        auto& promise = co.m_handle.promise();
-
-        assert(promise.m_received.has_value());
-        return std::move(promise.m_received).consume();
+        return m_receiver.resume();
     }
 
   private:
     Co<T, Env> m_co;
+    CoReceiver<T, Env> m_receiver;
 };
 
 template <class T, class Env>

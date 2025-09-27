@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <print>
 #include <span>
 #include <utility>
 #include <sys/epoll.h>
@@ -68,6 +69,8 @@ expected<std::span<::epoll_event>> Reactor::wait(std::optional<std::chrono::mill
 
 void Reactor::process(std::span<::epoll_event> events) noexcept {
     for (const auto& event : events) {
+        std::println("event: {}", event.data.u64);
+        
         if (event.data.u64 == kEventFdData) {
             std::uint64_t value{};
 
@@ -75,6 +78,8 @@ void Reactor::process(std::span<::epoll_event> events) noexcept {
                 read(m_event_fd_, std::span<std::byte>{reinterpret_cast<std::byte*>(&value), sizeof(value)});
 
             static_cast<void>(res);
+
+            std::println("interrupt received");
 
             continue;
         }
@@ -100,8 +105,10 @@ void Reactor::process(std::span<::epoll_event> events) noexcept {
 expected<void> Reactor::interrupt() noexcept {
     std::uint64_t value{};
 
+    std::println("interrupting reactor {}", m_event_fd_.fd());
+
     return write(m_event_fd_, std::span<const std::byte>{reinterpret_cast<const std::byte*>(&value), sizeof(value)})
-        .transform([](std::size_t) {});
+        .transform([](std::size_t n) { std::println("interrupt written {}", n); });
 }
 
 expected<Reactor::Registration*> Reactor::registerFd(const Fd& fd) noexcept {

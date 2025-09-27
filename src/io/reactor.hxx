@@ -25,6 +25,8 @@
 
 #include <functional>
 #include <optional>
+#include <print>
+#include <utility>
 #include <vector>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -43,6 +45,14 @@ class Reactor final {
         int fd;
         std::function<void()> read_cb;
         std::function<void()> write_cb;
+
+        void callback(io::Direction direction, std::function<void()> cb) noexcept {
+            auto old = std::exchange(direction == io::Direction::Read ? read_cb : write_cb, std::move(cb));
+
+            if (old) {
+                old();
+            }
+        }
     };
 
     Reactor(const Reactor&) noexcept = delete;

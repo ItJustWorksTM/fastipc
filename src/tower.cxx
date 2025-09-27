@@ -43,6 +43,8 @@
 
 #include "io/cursor.hxx"
 #include "io/fd.hxx"
+#include "io/polled_fd.hxx"
+#include "io/reactor.hxx"
 #include "io/result.hxx"
 #include "channel.hxx"
 #include "local_proto.hxx"
@@ -86,6 +88,7 @@ namespace {
 } // namespace
 
 [[nodiscard]] io::Co<Tower> Tower::create(std::string_view path) {
+
     auto sockfd =
         expect(io::adoptSysFd(::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0)), "failed to create tower socket");
 
@@ -98,6 +101,7 @@ namespace {
     auto unlink_res = io::sysCheck(::unlink(addr.sun_path));
     static_cast<void>(unlink_res);
 
+    // TODO: This technically has to be async as well
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     expect(io::sysCheck(::bind(sockfd.fd(), reinterpret_cast<const ::sockaddr*>(&addr), sizeof(addr))),
            "failed to bind tower socket");
@@ -105,29 +109,37 @@ namespace {
     constexpr int kListenQueueSize{128};
     expect(io::sysCheck(::listen(sockfd.fd(), kListenQueueSize)), "failed to listen to tower socket");
 
-    co_return Tower{std::move(sockfd)};
+    co_return Tower{expect(co_await io::PolledFd::create(std::move(sockfd)), "failed to created polled fd")};
 }
 
-io::Co<void> Tower::run() {
+io::Co<int> Tower::run() {
     // NOLINTNEXTLINE(altera-unroll-loops) Service loops should not be unrolled
     for (;;) {
-        auto expected_clientfd = io::adoptSysFd(::accept(m_sockfd.fd(), nullptr, nullptr));
+        auto expected_clientfd = co_await accept(m_sockfd);
+
         if (!expected_clientfd.has_value()) {
-            if (expected_clientfd.error() == std::errc::invalid_argument)
+            if (expected_clientfd.error() == std::errc::bad_file_descriptor)
                 break;
             if (expected_clientfd.error() == std::errc::connection_aborted)
                 continue;
+
+            std::println("warn: {}", expected_clientfd.error().message());
         }
 
         auto clientfd = expect(std::move(expected_clientfd), "failed to accept incoming connection");
 
+        // by detaching we have no way of shutting clients down
         co_await co::spawn(serve(std::move(clientfd)));
     }
+
+    co_return 0; // lazy void
 }
 
-void Tower::shutdown() { expect(io::sysCheck(::shutdown(m_sockfd.fd(), SHUT_RD)), "Failed to shutdown tower socket"); }
+void Tower::shutdown() {
+    // expect(io::sysCheck(::shutdown(m_sockfd.fd(), SHUT_RD)), "Failed to shutdown tower socket");
+}
 
-io::Co<void> Tower::serve(io::Fd clientfd) {
+io::Co<int> Tower::serve(io::PolledFd clientfd) {
     std::array<std::byte, 128u> buf{}; // NOLINT(*-magic-numbers)
     const auto bytes_read = expect(io::read(clientfd, std::span{buf}), "failed to read from client");
 
@@ -186,7 +198,7 @@ io::Co<void> Tower::serve(io::Fd clientfd) {
 
     static_cast<void>(expect(io::sysVal(::sendmsg(clientfd.fd(), &msg, 0)), "failed to send reply to client"));
 
-    co_return;
+    co_return 0; // too lazy for void
 }
 
 } // namespace fastipc

@@ -23,6 +23,7 @@
 #include <unordered_map>
 
 #include "io/fd.hxx"
+#include "io/polled_fd.hxx"
 #include "io/io_env.hxx"
 #include "channel.hxx"
 
@@ -32,7 +33,7 @@ class Tower final {
   public:
     [[nodiscard]] static io::Co<Tower> create(std::string_view path);
 
-    io::Co<void> run();
+    io::Co<int> run();
     void shutdown();
 
   private:
@@ -43,11 +44,11 @@ class Tower final {
         impl::ChannelPage* page{nullptr};
     };
 
-    explicit Tower(io::Fd sockfd) noexcept : m_sockfd{std::move(sockfd)} {}
+    explicit Tower(io::PolledFd sockfd) noexcept : m_sockfd{std::move(sockfd)} {}
 
-    io::Co<void> serve(io::Fd clientfd);
+    io::Co<int> serve(io::PolledFd clientfd);
 
-    io::Fd m_sockfd;
+    io::PolledFd m_sockfd;
     std::unordered_map<std::string, ChannelDescriptor> m_channels;
 };
 

@@ -27,6 +27,7 @@ namespace fastipc::io {
 struct Env final {
     co::Scheduler* scheduler;
     Reactor* reactor;
+    std::stop_token stop_token;
 };
 
 template <class T>
