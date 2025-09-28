@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <mutex>
 #include <queue>
 
 namespace fastipc::co {
@@ -27,11 +28,21 @@ namespace fastipc::co {
 class Scheduler final {
   public:
     // TODO: use std::function_ref
-    void schedule(std::function<void()> fn) { m_queue.push(std::move(fn)); }
+    void schedule(std::function<void()> fn) {
+        auto lock = std::scoped_lock{m_child_lock};
 
-    [[nodiscard]] bool can_run() const noexcept { return !m_queue.empty(); }
+        m_queue.push(std::move(fn));
+    }
+
+    [[nodiscard]] bool can_run() const noexcept {
+        auto lock = std::scoped_lock{m_child_lock};
+
+        return !m_queue.empty();
+    }
 
     void run() noexcept {
+        auto lock = std::scoped_lock{m_child_lock};
+
         const auto queued = m_queue.size();
 
         for (std::size_t i = 0; i < queued; ++i) {
@@ -41,7 +52,8 @@ class Scheduler final {
     }
 
   private:
+    mutable std::recursive_mutex m_child_lock;
     std::queue<std::function<void()>> m_queue;
 };
 
-} // namespace fastipc::io
+} // namespace fastipc::co

@@ -32,10 +32,12 @@
 
 namespace fastipc::io {
 
-Reactor::Reactor(Fd event_fd, Fd epoll_fd) : m_event_fd_{std::move(event_fd)}, m_epoll_fd_{std::move(epoll_fd)} {}
+Reactor::Reactor(Fd event_fd, Fd epoll_fd) : m_event_fd_{std::move(event_fd)}, m_epoll_fd_{std::move(epoll_fd)} {
+    m_events_buf_.resize(512);
+}
 
 expected<Reactor> Reactor::create() noexcept {
-    return adoptSysFd(::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC))
+    return adoptSysFd(::eventfd(0, EFD_CLOEXEC))
         .and_then([](Fd event_fd) {
             return adoptSysFd(::epoll_create1(0))
                 .and_then([&](Fd epoll_fd) {
@@ -69,8 +71,6 @@ expected<std::span<::epoll_event>> Reactor::wait(std::optional<std::chrono::mill
 
 void Reactor::process(std::span<::epoll_event> events) noexcept {
     for (const auto& event : events) {
-        std::println("event: {}", event.data.u64);
-        
         if (event.data.u64 == kEventFdData) {
             std::uint64_t value{};
 
@@ -79,7 +79,7 @@ void Reactor::process(std::span<::epoll_event> events) noexcept {
 
             static_cast<void>(res);
 
-            std::println("interrupt received");
+            std::println("reactor interrupt received");
 
             continue;
         }
@@ -103,12 +103,10 @@ void Reactor::process(std::span<::epoll_event> events) noexcept {
 }
 
 expected<void> Reactor::interrupt() noexcept {
-    std::uint64_t value{};
-
-    std::println("interrupting reactor {}", m_event_fd_.fd());
+    std::uint64_t value{1};
 
     return write(m_event_fd_, std::span<const std::byte>{reinterpret_cast<const std::byte*>(&value), sizeof(value)})
-        .transform([](std::size_t n) { std::println("interrupt written {}", n); });
+        .transform([](std::size_t) {});
 }
 
 expected<Reactor::Registration*> Reactor::registerFd(const Fd& fd) noexcept {
@@ -121,9 +119,6 @@ expected<Reactor::Registration*> Reactor::registerFd(const Fd& fd) noexcept {
     ::epoll_event event{.events = interests | EPOLLRDHUP | EPOLLET, .data = {.ptr = registered_io}};
 
     return sysCheck(::epoll_ctl(m_epoll_fd_.fd(), EPOLL_CTL_ADD, fd.fd(), &event)).transform([&]() {
-        // TODO: perhaps just use a fixed buffer
-        m_events_buf_.resize(m_events_buf_.size() + 1);
-
         return registered_io;
     });
 }

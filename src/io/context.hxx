@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdlib>
 #include <print>
 #include "co/scheduler.hxx"
 #include "co/task.hxx"
@@ -19,15 +20,10 @@ void context(F func) {
     while (scheduler.can_run()) {
         while (scheduler.can_run()) {
             scheduler.run();
-            std::println("inner loop");
             expect(reactor.react(std::chrono::milliseconds{0}), "failed to react to io events");
-            std::println("inner loop wake");
         }
 
-        std::println("outer loop");
         expect(reactor.react({}), "failed to react to io events");
-        std::println("outer loop wake");
-
     }
 
     static_cast<void>(task);

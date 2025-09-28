@@ -33,10 +33,8 @@ namespace {
 fastipc::io::Co<int> co_main() {
     auto tower = co_await fastipc::Tower::create("fastipcd");
 
-    std::println("starting run task");
     auto handle = co_await fastipc::co::spawn(tower.run());
 
-    std::println("starting test thread");
     auto test = std::jthread{[&] {
         constexpr std::string_view channel_name{"Hallowed are the Ori"};
         constexpr std::size_t max_payload_size{sizeof(int)};
@@ -69,7 +67,6 @@ fastipc::io::Co<int> co_main() {
         handle.abort();
     }};
 
-    std::println("waiting for complete");
     co_await handle;
 
     std::println("run done!");

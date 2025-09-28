@@ -19,12 +19,10 @@
 #pragma once
 
 #include <cassert>
-#include <chrono>
 #include <coroutine>
 #include <optional>
 #include <print>
 #include <stop_token>
-#include <thread>
 #include "co/coroutine.hxx"
 #include "io/io_env.hxx"
 #include "fd.hxx"
@@ -142,6 +140,7 @@ class TryIoAwaiter final {
         state = State::Done;
 
         // TODO: propagate, use adapter for that
+        std::println("set_stopped was called on TryIoAwaiter");
         assert(false);
     }
 
@@ -175,13 +174,10 @@ class TryIoAwaiter final {
         TryIoAwaiter* self;
 
         void operator()() noexcept {
-
-            std::println("TryIoAwaiter::StopFn");
-
             self->stop_requested = true;
             self->m_fd->m_registration->callback(self->m_direction, {});
-            // need to interrupt the reactor...
-            expect(self->m_fd->m_reactor->interrupt(), "fuck");
+            // need to interrupt the reactor, idk if that should be done here though...
+            self->m_fd->m_reactor->interrupt();
         }
     };
 
