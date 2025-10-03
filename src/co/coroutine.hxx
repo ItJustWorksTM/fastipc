@@ -242,9 +242,12 @@ class Promise<void, Env> : public Handler {
         return {};
     }
 
+    // So what if we call the receiver directly? why cache it?
     void return_void() noexcept { m_received.set_value(); }
     void unhandled_exception() noexcept override { m_received.set_exception(std::current_exception()); }
-    void unhandled_stopped() noexcept override { m_received.set_stopped(); }
+    void unhandled_stopped() noexcept override { 
+      // this does not trigger final_suspend, so that means we cant rely on it...
+      m_received.set_stopped(); }
 
     template <class A>
     decltype(auto) await_transform(A&& awaitable) noexcept {
@@ -319,8 +322,12 @@ class CoReceiver<void, Env> : public Receiver<void> {
         m_env->scheduler->schedule([cont = m_cont]() { cont.resume(); });
     };
 
-    // these also need to be scheduled...
-    void set_stopped() noexcept override { m_received.set_stopped(); };
+    void set_stopped() noexcept override { 
+      m_received.set_stopped();
+      
+      // TODO: also needs to be scheduled...
+      assert(false);
+    };
 
     void resume() {
         assert(m_received.has_value());

@@ -83,6 +83,7 @@ class TryIoAwaiter final {
     void await_suspend(std::coroutine_handle<Promise<T>> cont) {
         m_cont = cont;
         m_env = &cont.promise().env();
+
         std::stop_token st = cont.promise().stop_token();
 
         if (st.stop_requested()) {
@@ -139,16 +140,19 @@ class TryIoAwaiter final {
 
         state = State::Done;
 
-        // TODO: propagate, use adapter for that
+        // TODO: propagate, use adapter for that?
         std::println("set_stopped was called on TryIoAwaiter");
         assert(false);
+
+        // this is why we want Handler?
+        m_cont.promise().unhandled_stopped();
     }
 
     void schedule_poll() noexcept {
         if (state != State::Blocked) {
             return;
         }
-        
+
         state = State::Flight;
         m_env->scheduler->schedule([this]() { poll(); });
     }

@@ -1,6 +1,4 @@
 #pragma once
-#include <cstdlib>
-#include <print>
 #include "co/scheduler.hxx"
 #include "co/task.hxx"
 #include "io_env.hxx"
