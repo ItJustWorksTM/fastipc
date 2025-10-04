@@ -43,10 +43,10 @@ class Reactor final {
   public:
     struct Registration {
         int fd;
-        std::function<void()> read_cb;
-        std::function<void()> write_cb;
+        std::move_only_function<void()> read_cb;
+        std::move_only_function<void()> write_cb;
 
-        void callback(io::Direction direction, std::function<void()> cb) noexcept {
+        void callback(io::Direction direction, std::move_only_function<void()> cb) noexcept {
             // could make thread safe if we want to interrupt from different threads...
             auto old = std::exchange(direction == io::Direction::Read ? read_cb : write_cb, std::move(cb));
 

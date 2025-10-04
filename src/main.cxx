@@ -25,7 +25,7 @@ namespace {
 
 io::Co<int> main() {
     auto tower = co_await fastipc::Tower::create("fastipcd");
-    co_await tower.run();
+    static_cast<void>(co_await tower.run());
 
     co_return 0;
 }

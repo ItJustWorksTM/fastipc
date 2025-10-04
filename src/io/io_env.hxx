@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <stop_token>
 #include "co/coroutine.hxx"
 #include "co/scheduler.hxx"
 #include "reactor.hxx"

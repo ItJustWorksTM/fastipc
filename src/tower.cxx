@@ -129,7 +129,8 @@ io::Co<int> Tower::run() {
         auto clientfd = expect(std::move(expected_clientfd), "failed to accept incoming connection");
 
         // by detaching we have no way of shutting clients down
-        co_await co::spawn(serve(std::move(clientfd)));
+        // co_await co::spawn(serve(std::move(clientfd)));
+        static_cast<void>(clientfd);
     }
 
     co_return 0; // lazy void
