@@ -36,6 +36,7 @@ fastipc::io::Co<int> co_main() {
     auto handle = co_await fastipc::co::spawn(tower.run());
 
     auto test = std::jthread{[&] {
+        std::println("starting test in thead");
         constexpr std::string_view channel_name{"Hallowed are the Ori"};
         constexpr std::size_t max_payload_size{sizeof(int)};
 
@@ -43,12 +44,14 @@ fastipc::io::Co<int> co_main() {
         fastipc::Reader reader{channel_name, max_payload_size};
 
         {
+            std::println("reading sample");
             auto sample = reader.acquire();
             assert(sample.getSequenceId() == 0);
             reader.release(sample);
         }
 
         {
+            std::println("writing sample");
             auto sample = writer.prepare();
             assert(sample.getSequenceId() == 1);
             *static_cast<int*>(sample.getPayload()) = 5; // NOLINT(*-magic-numbers)
@@ -56,6 +59,7 @@ fastipc::io::Co<int> co_main() {
         }
 
         {
+            std::println("reading sample");
             auto sample = reader.acquire();
             assert(sample.getSequenceId() == 1);
             assert(*static_cast<const int*>(sample.getPayload()) == 5);
@@ -67,7 +71,8 @@ fastipc::io::Co<int> co_main() {
         handle.abort();
     }};
 
-    co_await handle;
+    std::println("waiting for join");
+    co_await std::move(handle);
 
     std::println("run done!");
 

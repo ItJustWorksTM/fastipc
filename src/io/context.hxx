@@ -1,4 +1,8 @@
 #pragma once
+#include <exception>
+#include <memory>
+#include <utility>
+#include "co/received.hxx"
 #include "co/scheduler.hxx"
 #include "co/task.hxx"
 #include "io_env.hxx"
@@ -12,13 +16,14 @@ struct Receiver {
     void set_value(T value) {
         std::println("complete: {}", value);
     }
-    void set_exception(std::exception_ptr) { std::println("oops exception"); }
+    void set_exception(std::exception_ptr exc) noexcept { std::rethrow_exception(std::move(exc)); }
     void set_stopped() { std::println("oops stopped"); }
 
-    Env& env() { return *m_env; }
+    Env& env() { return m_env; }
 
-    Env* m_env;
+    Env m_env;
 };
+
 
 template <class F>
 void context(F func) {
@@ -27,8 +32,7 @@ void context(F func) {
 
     Env env{.scheduler = &scheduler, .reactor = &reactor, .stop_token = {}};
 
-    auto op = func().connect(Receiver{&env});
-    
+    auto op = func().connect(Receiver{env});
     op.start();
 
     while (scheduler.can_run()) {
