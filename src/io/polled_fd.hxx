@@ -178,9 +178,6 @@ class TryIoSender final {
             void operator()() noexcept {
                 self->stop_requested = true;
                 self->m_fd->m_registration->callback(self->m_direction, {});
-
-                // TODO: need to interrupt the reactor, idk if that should be done here though...
-                expect(self->m_fd->m_reactor->interrupt(), "failed to interrupt reactor");
             }
         };
 
@@ -208,6 +205,10 @@ inline Co<expected<PolledFd>> accept(PolledFd& fd) {
     }
 
     co_return co_await PolledFd::create(std::move(accepted_fd_res).value());
+}
+
+[[nodiscard]] inline Co<expected<std::size_t>> aread(PolledFd& fd, std::span<std::byte> buf) noexcept {
+    co_return co_await io::TryIoSender{fd, io::Direction::Read, [&]() { return read(fd, buf); }};
 }
 
 } // namespace fastipc::io

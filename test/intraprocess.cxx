@@ -71,8 +71,7 @@ fastipc::io::Co<int> co_main() {
         handle.abort();
     }};
 
-    std::println("waiting for join");
-    co_await std::move(handle);
+    static_cast<void>(co_await std::move(handle));
 
     std::println("run done!");
 

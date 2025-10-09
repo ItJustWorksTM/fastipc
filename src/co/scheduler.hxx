@@ -22,16 +22,23 @@
 #include <functional>
 #include <mutex>
 #include <queue>
+#include "io/reactor.hxx"
 
 namespace fastipc::co {
 
 class Scheduler final {
   public:
-    // TODO: use std::function_ref
+    explicit Scheduler(io::Reactor* reactor = nullptr) : m_reactor(reactor) {}
+
     void schedule(std::move_only_function<void()> fn) {
         auto lock = std::scoped_lock{m_child_lock};
 
         m_queue.push(std::move(fn));
+
+        // make this smart..
+        if (m_reactor != nullptr) {
+            expect(m_reactor->interrupt(), "failed to interrupt reactor");
+        }
     }
 
     [[nodiscard]] bool can_run() const noexcept {
@@ -54,6 +61,8 @@ class Scheduler final {
   private:
     mutable std::recursive_mutex m_child_lock;
     std::queue<std::move_only_function<void()>> m_queue;
+
+    io::Reactor* m_reactor;
 };
 
 } // namespace fastipc::co

@@ -79,8 +79,6 @@ void Reactor::process(std::span<::epoll_event> events) noexcept {
 
             static_cast<void>(res);
 
-            std::println("reactor interrupt received");
-
             continue;
         }
 

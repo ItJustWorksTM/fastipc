@@ -1,6 +1,7 @@
 #pragma once
 #include <exception>
 #include <memory>
+#include <print>
 #include <utility>
 #include "co/received.hxx"
 #include "co/scheduler.hxx"
@@ -25,22 +26,25 @@ struct Receiver {
 };
 
 
+// so in p2300 it seems block_on will supply an in-place scheduler
+// which we should probably use for the main function, but then we can introduce this i/o env with a simple receiver?
+
 template <class F>
 void context(F func) {
-    auto scheduler = co::Scheduler{};
     auto reactor = expect(Reactor::create());
+    auto scheduler = co::Scheduler{&reactor};
 
     Env env{.scheduler = &scheduler, .reactor = &reactor, .stop_token = {}};
 
     auto op = func().connect(Receiver{env});
     op.start();
 
-    while (scheduler.can_run()) {
+    while (true) {
         while (scheduler.can_run()) {
             scheduler.run();
             expect(reactor.react(std::chrono::milliseconds{0}), "failed to react to io events");
         }
-
+        
         expect(reactor.react({}), "failed to react to io events");
     }
 
