@@ -1,6 +1,9 @@
 #pragma once
+#include <exception>
 #include <memory>
+#include <type_traits>
 #include <utility>
+#include "co/received.hxx"
 #include "co/scheduler.hxx"
 #include "co/task.hxx"
 #include "io/result.hxx"
@@ -30,18 +33,43 @@ class Runtime final {
     auto block_on(F func) noexcept {
         active_singleton() = this;
 
-        auto task = co::spawn(func());
+        using S = std::remove_cvref_t<decltype(func())>;
 
-        while (!task.completed()) {
+        co::Received<typename S::value_type> received{};
+
+        struct Receiver {
+            co::Received<typename S::value_type>* received;
+            Reactor* reactor;
+
+            void set_value(typename S::value_type value) {
+                received->set_value(std::move(value));
+                expect(reactor->interrupt());
+            }
+            void set_exception(std::exception_ptr exc) {
+                received->set_exception(std::move(exc));
+                expect(reactor->interrupt());
+            }
+        };
+
+        auto op = func().connect(Receiver{&received, m_reactor.get()});
+        op.start();
+
+        for (;;) {
             while (m_scheduler->can_run()) {
                 m_scheduler->run();
                 expect(m_reactor->react(std::chrono::milliseconds{0}), "failed to react to io events");
+
+                if (received.has_value()) {
+                    return std::move(received).consume();
+                }
+            }
+
+            if (received.has_value()) {
+                return std::move(received).consume();
             }
 
             expect(m_reactor->react({}), "failed to react to io events");
         }
-
-        return task.get();
     }
 
     Reactor& reactor() noexcept { return *m_reactor; }
