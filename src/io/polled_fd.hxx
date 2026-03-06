@@ -24,6 +24,7 @@
 #include <stop_token>
 #include <system_error>
 #include "co/coroutine.hxx"
+#include "io/context.hxx"
 #include "fd.hxx"
 #include "reactor.hxx"
 #include "result.hxx"
@@ -50,7 +51,7 @@ class PolledFd final {
         }
     }
 
-    static co::Co<expected<PolledFd>> create(Fd fd) noexcept;
+    static co::Co<expected<PolledFd>> create(Fd fd) noexcept { return create(std::move(fd), Runtime::singleton().reactor()); }
 
     static co::Co<expected<PolledFd>> create(Fd fd, Reactor& reactor) noexcept {
         co_return setBlocking(fd, false)

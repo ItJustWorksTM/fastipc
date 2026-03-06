@@ -31,7 +31,7 @@ namespace {
 
 fastipc::co::Co<int> co_main() {
     auto tower = co_await fastipc::Tower::create("fastipcd");
-    
+
     std::stop_source stop_source{};
     auto handle = fastipc::co::spawn(tower.run(stop_source.get_token()));
 
@@ -80,4 +80,8 @@ fastipc::co::Co<int> co_main() {
 
 } // namespace
 
-int main() { return fastipc::io::block_on(co_main); }
+int main() {
+    auto runtime = fastipc::expect(fastipc::io::Runtime::create());
+
+    return runtime.block_on(co_main);
+}

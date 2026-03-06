@@ -18,6 +18,7 @@
 
 #include <stop_token>
 #include "io/context.hxx"
+#include "io/result.hxx"
 #include "tower.hxx"
 
 namespace fastipc {
@@ -34,4 +35,8 @@ co::Co<int> main() {
 } // namespace
 } // namespace fastipc
 
-int main() { return fastipc::io::block_on(fastipc::main); }
+int main() {
+    auto runtime = fastipc::expect(fastipc::io::Runtime::create());
+
+    return runtime.block_on(fastipc::main);
+}
