@@ -24,6 +24,7 @@
 #include "fastipc.hxx"
 #include "tower.hxx"
 
+#include "co/coroutine.hxx"
 #include "co/task.hxx"
 #include "io/context.hxx"
 
@@ -68,10 +69,14 @@ fastipc::co::Co<int> co_main() {
 
         // tower.shutdown();
         std::println("test done. stopping handle");
-        stop_source.request_stop();
+
+        fastipc::io::Runtime::singleton().scheduler().schedule([&]() { stop_source.request_stop(); });
     }};
 
-    static_cast<void>(co_await std::move(handle));
+    try {
+        static_cast<void>(co_await std::move(handle));
+    } catch (const fastipc::co::StoppedException&) {
+    }
 
     std::println("run done!");
 

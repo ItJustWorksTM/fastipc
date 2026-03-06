@@ -1,9 +1,6 @@
 #pragma once
-#include <exception>
 #include <memory>
-#include <print>
 #include <utility>
-#include "co/received.hxx"
 #include "co/scheduler.hxx"
 #include "co/task.hxx"
 #include "io/result.hxx"
@@ -13,7 +10,8 @@ namespace fastipc::io {
 
 class Runtime final {
     explicit Runtime(Reactor reactor)
-        : m_reactor{std::move(reactor)}, m_scheduler{std::make_unique<co::Scheduler>(&m_reactor)} {}
+        : m_reactor{std::make_unique<Reactor>(std::move(reactor))},
+          m_scheduler{std::make_unique<co::Scheduler>(m_reactor.get())} {}
 
   public:
     static expected<Runtime> create() noexcept {
@@ -37,16 +35,16 @@ class Runtime final {
         while (!task.completed()) {
             while (m_scheduler->can_run()) {
                 m_scheduler->run();
-                expect(m_reactor.react(std::chrono::milliseconds{0}), "failed to react to io events");
+                expect(m_reactor->react(std::chrono::milliseconds{0}), "failed to react to io events");
             }
 
-            expect(m_reactor.react({}), "failed to react to io events");
+            expect(m_reactor->react({}), "failed to react to io events");
         }
 
         return task.get();
     }
 
-    Reactor& reactor() noexcept { return m_reactor; }
+    Reactor& reactor() noexcept { return *m_reactor; }
     co::Scheduler& scheduler() noexcept { return *m_scheduler; }
 
   private:
@@ -56,7 +54,7 @@ class Runtime final {
         return runtime;
     }
 
-    Reactor m_reactor;
+    std::unique_ptr<Reactor> m_reactor;
     std::unique_ptr<co::Scheduler> m_scheduler;
 };
 

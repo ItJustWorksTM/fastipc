@@ -136,7 +136,7 @@ class SenderAwaiter {
         return std::noop_coroutine();
     }
 
-    [[nodiscard]] value_type await_resume() noexcept { return std::move(received).consume(); }
+    [[nodiscard]] value_type await_resume() { return std::move(received).consume(); }
 
   private:
     class AwaiterReceiver {

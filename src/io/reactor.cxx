@@ -21,7 +21,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <print>
 #include <span>
 #include <utility>
 #include <sys/epoll.h>

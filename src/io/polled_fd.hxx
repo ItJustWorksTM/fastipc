@@ -60,6 +60,8 @@ class PolledFd final {
     }
 
     [[nodiscard]] constexpr const int& fd() const noexcept { return m_fd.fd(); }
+    [[nodiscard]] Reactor& reactor() const noexcept { return *m_reactor; }
+
 
   private:
     template <class>
@@ -195,11 +197,11 @@ inline co::Co<expected<PolledFd>> accept(PolledFd& fd, std::stop_token stop_toke
         co_return unexpected{accepted_fd_res.error()};
     }
 
-    co_return co_await PolledFd::create(std::move(accepted_fd_res).value());
+    co_return co_await PolledFd::create(std::move(accepted_fd_res).value(), fd.reactor());
 }
 
 [[nodiscard]] inline co::Co<expected<std::size_t>> aread(PolledFd& fd, std::span<std::byte> buf,
-                                                         std::stop_token stop_token = {}) noexcept {
+                                                         std::stop_token stop_token = {}) {
     co_return co_await io::TryIoSender{fd, io::Direction::Read, std::move(stop_token), [&]() { return read(fd, buf); }};
 }
 

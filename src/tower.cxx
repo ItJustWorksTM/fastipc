@@ -52,7 +52,7 @@
 namespace fastipc {
 namespace {
 
-[[nodiscard]] io::expected<std::optional<ClientRequest>> readClientRequest(std::span<const std::byte>& obuf) noexcept {
+[[nodiscard]] io::expected<std::optional<ClientRequest>> readClientRequest(std::span<const std::byte>& obuf) {
     constexpr static auto kMinSize = 10u;
 
     auto buf = obuf;
