@@ -6,7 +6,6 @@
 #include "co/received.hxx"
 #include "co/scheduler.hxx"
 #include "co/task.hxx"
-#include "io_env.hxx"
 #include "reactor.hxx"
 
 namespace fastipc::io {
@@ -18,11 +17,6 @@ struct Receiver {
         std::println("complete: {}", value);
     }
     void set_exception(std::exception_ptr exc) noexcept { std::rethrow_exception(std::move(exc)); }
-    void set_stopped() { std::println("oops stopped"); }
-
-    Env& env() { return m_env; }
-
-    Env m_env;
 };
 
 
@@ -30,25 +24,29 @@ struct Receiver {
 // which we should probably use for the main function, but then we can introduce this i/o env with a simple receiver?
 
 template <class F>
-void context(F func) {
-    auto reactor = expect(Reactor::create());
-    auto scheduler = co::Scheduler{&reactor};
+void context(F func);
 
-    Env env{.scheduler = &scheduler, .reactor = &reactor, .stop_token = {}};
 
-    auto op = func().connect(Receiver{env});
-    op.start();
+// template <class F>
+// void context(F func) {
+//     auto reactor = expect(Reactor::create());
+//     auto scheduler = co::Scheduler{&reactor};
 
-    while (true) {
-        while (scheduler.can_run()) {
-            scheduler.run();
-            expect(reactor.react(std::chrono::milliseconds{0}), "failed to react to io events");
-        }
+//     Env env{.scheduler = &scheduler, .reactor = &reactor, .stop_token = {}};
+
+//     auto op = func().connect(Receiver{env});
+//     op.start();
+
+//     while (true) {
+//         while (scheduler.can_run()) {
+//             scheduler.run();
+//             expect(reactor.react(std::chrono::milliseconds{0}), "failed to react to io events");
+//         }
         
-        expect(reactor.react({}), "failed to react to io events");
-    }
+//         expect(reactor.react({}), "failed to react to io events");
+//     }
 
-    static_cast<void>(op);
-}
+//     static_cast<void>(op);
+// }
 
 } // namespace fastipc::io

@@ -16,16 +16,17 @@
  *
  */
 
+#include <stop_token>
 #include "io/context.hxx"
-#include "io/io_env.hxx"
 #include "tower.hxx"
 
 namespace fastipc {
 namespace {
 
-io::Co<int> main() {
+co::Co<int> main() {
     auto tower = co_await fastipc::Tower::create("fastipcd");
-    static_cast<void>(co_await tower.run());
+    std::stop_source stop_source{};
+    static_cast<void>(co_await tower.run(stop_source.get_token()));
 
     co_return 0;
 }

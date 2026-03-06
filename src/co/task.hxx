@@ -25,15 +25,30 @@
 #include <stop_token>
 #include <type_traits>
 #include <utility>
+#include "co/coroutine.hxx"
 #include "co/received.hxx"
 
 namespace fastipc::co {
 
 struct Unit final {};
 
+class Listener {
+  public:
+    Listener() = default;
+
+    Listener(Listener&&) noexcept = default;
+    Listener& operator=(Listener&&) noexcept = default;
+
+    Listener(const Listener&) noexcept = default;
+    Listener& operator=(const Listener&) noexcept = default;
+
+    virtual ~Listener() = default;
+
+    virtual void notify() = 0;
+};
+
 template <class T>
 struct State {
-
     State() = default;
     State(const State&) = delete;
     State& operator=(const State&) = delete;
@@ -43,28 +58,45 @@ struct State {
     virtual ~State() = default;
 
     Received<T> received{};
+    Listener* listener{};
 };
 
 template <class T>
-struct JoinHandle {
+struct JoinHandle final {
     [[nodiscard]] bool completed() const noexcept { return state->received.has_value(); }
 
-    void abort() noexcept {
-        // TODO
-    }
-
-    template <class>
     using value_type = T;
 
     template <class R>
     auto connect(R&& receiver) && {
-        struct OperationState {
+        struct OperationState final : public Listener {
             R receiver;
             std::shared_ptr<State<T>> state;
 
+            OperationState(R&& receiver, std::shared_ptr<State<T>> state)
+                : receiver{std::move(receiver)}, state{std::move(state)} {}
+
+            OperationState(OperationState&&) noexcept = default;
+            OperationState& operator=(OperationState&&) noexcept = default;
+
+            OperationState(const OperationState&) noexcept = default;
+            OperationState& operator=(const OperationState&) noexcept = default;
+
+            ~OperationState() override = default;
+
+            void notify() override {
+                if (state->received.has_value()) {
+                    state->listener = nullptr;
+                    std::move(state->received).forward(receiver);
+                }
+            }
+
             void start() {
-                // TODO: put receiver on shared state
-                // OR check if received is already populated and immediately forward it
+                if (state->received.has_value()) {
+                    std::move(state->received).forward(receiver);
+                } else {
+                    state->listener = this;
+                }
             }
         };
 
@@ -76,26 +108,20 @@ struct JoinHandle {
 };
 
 template <class S>
-struct SpawnSender {
-
-    template <class Env>
-    using task_value_type = typename S::template value_type<Env>;
-
-    template <class Env>
-    using value_type = JoinHandle<task_value_type<Env>>;
+struct SpawnSender final {
+    using task_value_type = typename S::value_type;
+    using value_type = JoinHandle<task_value_type>;
 
     template <class R>
     struct OperationState {
         R receiver;
         S sender;
 
-        using Env = std::remove_cvref_t<decltype(std::declval<R>().env())>;
-        using T = task_value_type<Env>;
+        using T = task_value_type;
 
         void start() {
-
             struct StateImpl : State<T> {
-                explicit StateImpl(Env env) : State<T>{}, env{env} {}
+                explicit StateImpl() : State<T>{} {}
 
                 StateImpl(const StateImpl&) = delete;
                 StateImpl& operator=(const StateImpl&) = delete;
@@ -107,21 +133,28 @@ struct SpawnSender {
                 struct Receiver {
                     std::shared_ptr<StateImpl> state;
 
-                    void set_value(T value) { state->received.set_value(std::move(value)); }
-                    void set_exception(std::exception_ptr exc) { state->received.set_exception(std::move(exc)); }
-                    void set_stopped() { state->received.set_stopped(); };
+                    void set_value(T value) {
+                        state->received.set_value(std::move(value));
 
-                    Env& env() { return state->env; }
+                        if (state->listener) {
+                            state->listener->notify();
+                        }
+                    }
+                    void set_exception(std::exception_ptr exc) {
+                        state->received.set_exception(std::move(exc));
+
+                        if (state->listener) {
+                            state->listener->notify();
+                        }
+                    }
                 };
 
                 using operation_state_type = decltype(std::declval<S>().connect(std::declval<Receiver>()));
 
-                Env env;
                 std::optional<operation_state_type> operation_state{};
             };
 
-            // TODO: add stop_source
-            auto state = std::make_shared<StateImpl>(receiver.env());
+            auto state = std::make_shared<StateImpl>();
             state->operation_state.emplace(std::move(sender).connect(typename StateImpl::Receiver{state})).start();
 
             receiver.set_value(JoinHandle<T>{std::move(state)});

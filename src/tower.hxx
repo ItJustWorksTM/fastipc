@@ -24,16 +24,15 @@
 
 #include "io/fd.hxx"
 #include "io/polled_fd.hxx"
-#include "io/io_env.hxx"
 #include "channel.hxx"
 
 namespace fastipc {
 
 class Tower final {
   public:
-    [[nodiscard]] static io::Co<Tower> create(std::string_view path);
+    [[nodiscard]] static co::Co<Tower> create(std::string_view path);
 
-    io::Co<int> run();
+    co::Co<int> run(std::stop_token stop_token);
     void shutdown();
 
   private:
@@ -46,7 +45,7 @@ class Tower final {
 
     explicit Tower(io::PolledFd sockfd) noexcept : m_sockfd{std::move(sockfd)} {}
 
-    io::Co<int> serve(io::PolledFd clientfd);
+    co::Co<int> serve(io::PolledFd clientfd, std::stop_token stop_token);
 
     io::PolledFd m_sockfd;
     std::unordered_map<std::string, ChannelDescriptor> m_channels;

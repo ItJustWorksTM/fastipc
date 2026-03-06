@@ -26,14 +26,14 @@
 
 #include "co/task.hxx"
 #include "io/context.hxx"
-#include "io/io_env.hxx"
 
 namespace {
 
-fastipc::io::Co<int> co_main() {
+fastipc::co::Co<int> co_main() {
     auto tower = co_await fastipc::Tower::create("fastipcd");
-
-    auto handle = co_await fastipc::co::spawn(tower.run());
+    
+    std::stop_source stop_source{};
+    auto handle = co_await fastipc::co::spawn(tower.run(stop_source.get_token()));
 
     auto test = std::jthread{[&] {
         std::println("starting test in thead");
@@ -68,7 +68,7 @@ fastipc::io::Co<int> co_main() {
 
         // tower.shutdown();
         std::println("test done. stopping handle");
-        handle.abort();
+        stop_source.request_stop();
     }};
 
     static_cast<void>(co_await std::move(handle));

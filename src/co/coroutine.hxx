@@ -9,7 +9,12 @@
 
 namespace fastipc::co {
 
-template <class T, class Env>
+class StoppedException final : public std::exception {
+  public:
+    [[nodiscard]] const char* what() const noexcept override { return "operation stopped"; }
+};
+
+template <class T>
 class Receiver {
   public:
     Receiver() = default;
@@ -24,9 +29,23 @@ class Receiver {
 
     virtual void set_value(T value) = 0;
     virtual void set_exception(std::exception_ptr exc) = 0;
-    virtual void set_stopped() = 0;
+};
 
-    virtual Env& env() = 0;
+template <>
+class Receiver<void> {
+  public:
+    Receiver() = default;
+
+    Receiver(Receiver&&) noexcept = default;
+    Receiver& operator=(Receiver&&) noexcept = default;
+
+    Receiver(const Receiver&) noexcept = default;
+    Receiver& operator=(const Receiver&) noexcept = default;
+
+    virtual ~Receiver() = default;
+
+    virtual void set_value() = 0;
+    virtual void set_exception(std::exception_ptr exc) = 0;
 };
 
 template <class A, class P>
@@ -34,14 +53,12 @@ struct AwaitedBy {
     A value;
 };
 
-template <class T, class Env>
+template <class T>
 class [[nodiscard]] Promise {
   public:
     class State {
 
       public:
-        using env_type = Env;
-
         Promise get_return_object() { return Promise{std::coroutine_handle<State>::from_promise(*this)}; }
 
         std::suspend_always initial_suspend() noexcept { return {}; }
@@ -56,16 +73,13 @@ class [[nodiscard]] Promise {
 
         void return_value(T value) { received.set_value(std::move(value)); }
         void unhandled_exception() { received.set_exception(std::current_exception()); }
-        void unhandled_stopped() { received.set_stopped(); }
 
         template <class A>
-        AwaitedBy<A, typename Promise<T, Env>::State> await_transform(A&& awaitable) {
+        AwaitedBy<A, typename Promise<T>::State> await_transform(A&& awaitable) {
             return {std::forward<A>(awaitable)};
         }
 
-        Receiver<T, Env>* receiver;
-
-        Env& env() { return receiver->env(); }
+        Receiver<T>* receiver;
 
       private:
         // sadly we need to buffer the received value to allow final_suspend to run
@@ -106,7 +120,7 @@ class SenderAwaiter {
 
   public:
     using sender_type = S;
-    using value_type = typename sender_type::template value_type<typename P::env_type>;
+    using value_type = sender_type::value_type;
 
     explicit SenderAwaiter(sender_type sender) : state{std::move(sender)} {}
 
@@ -114,7 +128,8 @@ class SenderAwaiter {
 
     std::coroutine_handle<> await_suspend(std::coroutine_handle<P> cont) {
         // TODO: somehow operation state needs to be moveable..
-        auto& operation_state = state.template emplace<operation_state_type>(std::get<sender_type>(std::move(state)).connect(AwaiterReceiver{this->received, cont}));
+        auto& operation_state = state.template emplace<operation_state_type>(
+            std::get<sender_type>(std::move(state)).connect(AwaiterReceiver{this->received, cont}));
 
         operation_state.start();
 
@@ -141,14 +156,6 @@ class SenderAwaiter {
             m_awaiter.resume();
         }
 
-        void set_stopped() {
-            m_received->set_stopped();
-
-            m_awaiter.promise().unhandled_stopped();
-        }
-
-        auto& env() { return m_awaiter.promise().env(); }
-
       private:
         Received<value_type>* m_received;
         std::coroutine_handle<P> m_awaiter;
@@ -166,23 +173,22 @@ SenderAwaiter<A, P> operator co_await(AwaitedBy<A, P>&& awaited_by) {
     return SenderAwaiter<A, P>{std::move(awaited_by).value};
 }
 
-template <class T, class Env>
+template <class T>
 class [[nodiscard]] Co {
 
   public:
-    using promise_type = Promise<T, Env>::State;
+    using promise_type = Promise<T>::State;
 
-    template <class>
     using value_type = T;
 
-    explicit(false) Co(Promise<T, Env> promise) : m_promise{std::move(promise)} {}
+    explicit(false) Co(Promise<T> promise) : m_promise{std::move(promise)} {}
 
     template <class R>
     auto connect(R&& receiver) && {
         class OperationState {
 
           public:
-            OperationState(Promise<T, Env> promise, R receiver)
+            OperationState(Promise<T> promise, R receiver)
                 : m_receiver{std::move(receiver)}, m_promise{std::move(promise)} {}
 
             void start() {
@@ -193,47 +199,29 @@ class [[nodiscard]] Co {
             }
 
           private:
-            class PromiseReceiver : public Receiver<T, Env> {
+            class PromiseReceiver : public Receiver<T> {
 
               public:
-                explicit PromiseReceiver(R receiver) : Receiver<T, Env>{}, m_receiver{std::move(receiver)} {}
+                explicit PromiseReceiver(R receiver) : Receiver<T>{}, m_receiver{std::move(receiver)} {}
 
                 void set_value(T value) override { m_receiver.set_value(std::move(value)); }
                 void set_exception(std::exception_ptr exc) override { m_receiver.set_exception(exc); }
-                void set_stopped() override { m_receiver.set_stopped(); }
-
-                Env& env() override { return m_receiver.env(); }
 
               private:
                 R m_receiver;
             };
 
             PromiseReceiver m_receiver;
-            Promise<T, Env> m_promise;
+            Promise<T> m_promise;
         };
 
         return OperationState{std::move(*this).m_promise, std::forward<R>(receiver)};
     }
 
   private:
-    Promise<T, Env> m_promise;
+    Promise<T> m_promise;
 };
 
-struct EnvSender {
-    template <class Env>
-    using value_type = Env;
-
-    template <class R>
-    struct OperationState {
-        R receiver;
-
-        void start() { receiver.set_value(receiver.env()); }
-    };
-
-    template <class R>
-    OperationState<R> connect(R&& receiver) {
-        return {std::forward<R>(receiver)};
-    }
-};
+// auto block_on
 
 } // namespace fastipc::co

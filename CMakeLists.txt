@@ -30,7 +30,6 @@ target_sources (
             src/io/polled_fd.hxx
             src/io/reactor.hxx
             src/io/reactor.cxx
-            src/io/io_env.hxx
             src/io/context.hxx
             src/co/scheduler.hxx
             src/co/coroutine.hxx

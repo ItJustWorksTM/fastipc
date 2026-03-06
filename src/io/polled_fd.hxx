@@ -19,15 +19,20 @@
 #pragma once
 
 #include <cassert>
+#include <exception>
 #include <memory>
 #include <stop_token>
+#include <system_error>
 #include "co/coroutine.hxx"
-#include "io/io_env.hxx"
 #include "fd.hxx"
 #include "reactor.hxx"
 #include "result.hxx"
 
 namespace fastipc::io {
+
+constexpr bool is_error_blocking(std::error_code error) noexcept {
+    return error == std::errc::operation_would_block || error == std::errc::resource_unavailable_try_again;
+}
 
 class PolledFd final {
   public:
@@ -45,9 +50,9 @@ class PolledFd final {
         }
     }
 
-    static Co<expected<PolledFd>> create(Fd fd) noexcept {
-        auto& reactor = *(co_await co::EnvSender{}).reactor;
+    static co::Co<expected<PolledFd>> create(Fd fd) noexcept;
 
+    static co::Co<expected<PolledFd>> create(Fd fd, Reactor& reactor) noexcept {
         co_return setBlocking(fd, false)
             .and_then([&]() { return reactor.registerFd(fd); })
             .transform([&](auto* registration) { return PolledFd{std::move(fd), registration, reactor}; });
@@ -73,17 +78,17 @@ class TryIoSender final {
   public:
     using result_type = std::invoke_result_t<F>;
 
-    template <class>
     using value_type = result_type;
 
-    explicit TryIoSender(const io::PolledFd& fd, io::Direction direction, F io)
-        : m_fd{&fd}, m_direction{direction}, m_io{std::move(io)} {}
+    explicit TryIoSender(const io::PolledFd& fd, io::Direction direction, std::stop_token stop_token, F io)
+        : m_fd{&fd}, m_direction{direction}, m_stop_token{std::move(stop_token)}, m_io{std::move(io)} {}
 
     template <class R>
     class OperationState {
       public:
-        OperationState(R&& receiver, const io::PolledFd& fd, io::Direction direction, F io)
-            : m_fd{&fd}, m_direction{direction}, m_io{std::move(io)}, m_receiver{std::move(receiver)} {}
+        OperationState(R&& receiver, const io::PolledFd& fd, io::Direction direction, std::stop_token stop_token, F io)
+            : m_fd{&fd}, m_direction{direction}, m_stop_token{std::move(stop_token)}, m_io{std::move(io)},
+              m_receiver{std::move(receiver)} {}
 
         OperationState(const OperationState&) noexcept = delete;
         OperationState& operator=(const OperationState&) noexcept = delete;
@@ -94,91 +99,75 @@ class TryIoSender final {
         ~OperationState() = default;
 
         void start() {
-            std::stop_token st = m_receiver.env().stop_token;
-
-            if (st.stop_requested()) {
+            if (m_stop_token.stop_requested()) {
                 set_stopped();
                 return;
             }
 
-            m_stop_fn = std::make_unique<std::stop_callback<StopFn>>(std::move(st), StopFn{this});
-
-            schedule_poll();
+            m_stop_fn = std::make_unique<std::stop_callback<StopFn>>(m_stop_token, StopFn{this});
+            poll();
         }
 
       private:
         void poll() {
-            if (stop_requested) {
+            if (m_state != State::Blocked) {
+                return;
+            }
+
+            if (m_stop_token.stop_requested()) {
                 set_stopped();
                 return;
             }
 
-            // POSSIBLE RACE CONDITION
-            // stop_request set to true, but in flight, set new reactor callback, ignore stop..
-
             auto res = m_io();
 
-            if (!res.has_value()) {
-                if (res.error() == std::errc::operation_would_block ||
-                    res.error() == std::errc::resource_unavailable_try_again) {
-
-                    state = State::Blocked;
-                    m_fd->m_registration->callback(m_direction, [this]() { schedule_poll(); });
-
-                    return;
-                }
+            if (res.has_value()) {
+                set_value(std::move(res));
+                return;
             }
 
-            set_value(std::move(res));
+            if (!is_error_blocking(res.error())) {
+                set_value(std::move(res));
+                return;
+            }
+
+            m_state = State::Blocked;
+            m_fd->m_registration->callback(m_direction, [this]() { poll(); });
         }
 
-        void set_value(result_type res) {
+        void set_value(result_type value) {
             m_stop_fn.reset();
 
-            state = State::Done;
-            m_receiver.env().scheduler->schedule(
-                [&, value = std::move(res)]() mutable { m_receiver.set_value(std::move(value)); });
+            m_state = State::Done;
+            m_receiver.set_value(std::move(value));
         }
 
         void set_stopped() {
             m_stop_fn.reset();
 
-            state = State::Done;
-
-            m_receiver.env().scheduler->schedule([&]() { m_receiver.set_stopped(); });
-        }
-
-        void schedule_poll() noexcept {
-            if (state != State::Blocked) {
-                return;
-            }
-
-            state = State::Flight;
-            m_receiver.env().scheduler->schedule([this]() { poll(); });
+            m_state = State::Stopped;
+            m_receiver.set_exception(std::make_exception_ptr(co::StoppedException{}));
         }
 
         const io::PolledFd* m_fd;
         io::Direction m_direction;
+        std::stop_token m_stop_token;
         F m_io;
 
         R m_receiver;
 
         enum class State : std::uint8_t {
             Blocked,
-            Flight,
             Done,
+            Stopped,
         };
 
-        State state = State::Blocked;
-        bool stop_requested = false;
+        State m_state = State::Blocked;
 
         struct StopFn final {
             OperationState* self;
 
-            void operator()() noexcept {
-                self->stop_requested = true;
-                self->m_fd->m_registration->callback(self->m_direction, {});
-            }
+            void operator()() noexcept { self->m_fd->m_registration->callback(self->m_direction, {}); }
         };
 
         // cb is not moveable..
@@ -187,17 +176,18 @@ class TryIoSender final {
 
     template <class R>
     OperationState<R> connect(R&& receiver) && {
-        return OperationState{std::forward<R>(receiver), *m_fd, m_direction, std::move(m_io)};
+        return OperationState{std::forward<R>(receiver), *m_fd, m_direction, std::move(m_stop_token), std::move(m_io)};
     }
 
   private:
     const io::PolledFd* m_fd;
     io::Direction m_direction;
+    std::stop_token m_stop_token;
     F m_io;
 };
 
-inline Co<expected<PolledFd>> accept(PolledFd& fd) {
-    auto accepted_fd_res = co_await io::TryIoSender{fd, io::Direction::Read,
+inline co::Co<expected<PolledFd>> accept(PolledFd& fd, std::stop_token stop_token = {}) {
+    auto accepted_fd_res = co_await io::TryIoSender{fd, io::Direction::Read, std::move(stop_token),
                                                     [&]() { return adoptSysFd(::accept(fd.fd(), nullptr, nullptr)); }};
 
     if (!accepted_fd_res.has_value()) {
@@ -207,8 +197,9 @@ inline Co<expected<PolledFd>> accept(PolledFd& fd) {
     co_return co_await PolledFd::create(std::move(accepted_fd_res).value());
 }
 
-[[nodiscard]] inline Co<expected<std::size_t>> aread(PolledFd& fd, std::span<std::byte> buf) noexcept {
-    co_return co_await io::TryIoSender{fd, io::Direction::Read, [&]() { return read(fd, buf); }};
+[[nodiscard]] inline co::Co<expected<std::size_t>> aread(PolledFd& fd, std::span<std::byte> buf,
+                                                         std::stop_token stop_token = {}) noexcept {
+    co_return co_await io::TryIoSender{fd, io::Direction::Read, std::move(stop_token), [&]() { return read(fd, buf); }};
 }
 
 } // namespace fastipc::io
