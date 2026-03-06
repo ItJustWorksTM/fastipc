@@ -80,4 +80,4 @@ fastipc::co::Co<int> co_main() {
 
 } // namespace
 
-int main() { fastipc::io::context(co_main); }
+int main() { return fastipc::io::block_on(co_main); }

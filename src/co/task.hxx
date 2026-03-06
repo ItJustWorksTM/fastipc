@@ -61,6 +61,7 @@ struct State {
 template <class T>
 struct JoinHandle final {
     [[nodiscard]] bool completed() const noexcept { return state->received.has_value(); }
+    [[nodiscard]] T get() { return std::move(state->received).consume(); }
 
     using value_type = T;
 
@@ -100,7 +101,6 @@ struct JoinHandle final {
         return OperationState{std::forward<R>(receiver), std::move(state)};
     }
 
-    // dtor slice?
     std::shared_ptr<State<T>> state;
 };
 

@@ -10,43 +10,23 @@
 
 namespace fastipc::io {
 
-
-struct Receiver {
-    template <class T>
-    void set_value(T value) {
-        std::println("complete: {}", value);
-    }
-    void set_exception(std::exception_ptr exc) noexcept { std::rethrow_exception(std::move(exc)); }
-};
-
-
-// so in p2300 it seems block_on will supply an in-place scheduler
-// which we should probably use for the main function, but then we can introduce this i/o env with a simple receiver?
-
 template <class F>
-void context(F func);
+auto block_on(F func) {
+    auto reactor = expect(Reactor::create());
+    auto scheduler = co::Scheduler{&reactor};
 
+    auto task = co::spawn(func());
 
-// template <class F>
-// void context(F func) {
-//     auto reactor = expect(Reactor::create());
-//     auto scheduler = co::Scheduler{&reactor};
-
-//     Env env{.scheduler = &scheduler, .reactor = &reactor, .stop_token = {}};
-
-//     auto op = func().connect(Receiver{env});
-//     op.start();
-
-//     while (true) {
-//         while (scheduler.can_run()) {
-//             scheduler.run();
-//             expect(reactor.react(std::chrono::milliseconds{0}), "failed to react to io events");
-//         }
+    while (!task.completed()) {
+        while (scheduler.can_run()) {
+            scheduler.run();
+            expect(reactor.react(std::chrono::milliseconds{0}), "failed to react to io events");
+        }
         
-//         expect(reactor.react({}), "failed to react to io events");
-//     }
+        expect(reactor.react({}), "failed to react to io events");
+    }
 
-//     static_cast<void>(op);
-// }
+    return task.get();
+}
 
 } // namespace fastipc::io

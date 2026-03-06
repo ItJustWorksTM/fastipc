@@ -34,6 +34,4 @@ co::Co<int> main() {
 } // namespace
 } // namespace fastipc
 
-int main() {
-    fastipc::io::context(fastipc::main);
-}
+int main() { return fastipc::io::block_on(fastipc::main); }

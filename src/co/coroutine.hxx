@@ -222,6 +222,4 @@ class [[nodiscard]] Co {
     Promise<T> m_promise;
 };
 
-// auto block_on
-
 } // namespace fastipc::co
