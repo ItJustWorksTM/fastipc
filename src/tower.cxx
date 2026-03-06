@@ -114,22 +114,19 @@ namespace {
 
 co::Co<int> Tower::run(std::stop_token stop_token) {
     // NOLINTNEXTLINE(altera-unroll-loops) Service loops should not be unrolled
-    for (;;) {
-        auto expected_clientfd = co_await accept(m_sockfd);
+    for (; !stop_token.stop_requested();) {
+        auto expected_clientfd = co_await accept(m_sockfd, stop_token);
 
         if (!expected_clientfd.has_value()) {
             if (expected_clientfd.error() == std::errc::bad_file_descriptor)
                 break;
             if (expected_clientfd.error() == std::errc::connection_aborted)
                 continue;
-
         }
 
         auto clientfd = expect(std::move(expected_clientfd), "failed to accept incoming connection");
 
-        // by detaching we have no way of shutting clients down
-        static_cast<void>(co_await co::spawn(serve(std::move(clientfd), stop_token)));
-        static_cast<void>(clientfd);
+        static_cast<void>(co::spawn(serve(std::move(clientfd), stop_token)));
     }
 
     co_return 0; // lazy void
@@ -141,7 +138,8 @@ void Tower::shutdown() {
 
 co::Co<int> Tower::serve(io::PolledFd clientfd, std::stop_token stop_token) {
     std::array<std::byte, 128u> buf{}; // NOLINT(*-magic-numbers)
-    const auto bytes_read = expect(co_await io::aread(clientfd, std::span{buf}, stop_token), "failed to read from client");
+    const auto bytes_read =
+        expect(co_await io::aread(clientfd, std::span{buf}, stop_token), "failed to read from client");
 
     auto recvbuf = std::span<const std::byte>{buf}.first(bytes_read);
     const auto request = expect(expect(readClientRequest(recvbuf), "invalid request"), "incomplete message");
@@ -196,6 +194,7 @@ co::Co<int> Tower::serve(io::PolledFd clientfd, std::stop_token stop_token) {
     std::memcpy(CMSG_DATA(cmsg), &channel.memfd.fd(), sizeof(channel.memfd));
     msg.msg_controllen = cmsg->cmsg_len;
 
+    // TODO: asyncify
     static_cast<void>(expect(io::sysVal(::sendmsg(clientfd.fd(), &msg, 0)), "failed to send reply to client"));
 
     co_return 0; // too lazy for void

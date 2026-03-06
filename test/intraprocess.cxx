@@ -33,7 +33,7 @@ fastipc::co::Co<int> co_main() {
     auto tower = co_await fastipc::Tower::create("fastipcd");
     
     std::stop_source stop_source{};
-    auto handle = co_await fastipc::co::spawn(tower.run(stop_source.get_token()));
+    auto handle = fastipc::co::spawn(tower.run(stop_source.get_token()));
 
     auto test = std::jthread{[&] {
         std::println("starting test in thead");

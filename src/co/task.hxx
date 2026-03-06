@@ -22,10 +22,7 @@
 #include <exception>
 #include <memory>
 #include <optional>
-#include <stop_token>
-#include <type_traits>
 #include <utility>
-#include "co/coroutine.hxx"
 #include "co/received.hxx"
 
 namespace fastipc::co {
@@ -108,70 +105,45 @@ struct JoinHandle final {
 };
 
 template <class S>
-struct SpawnSender final {
-    using task_value_type = typename S::value_type;
-    using value_type = JoinHandle<task_value_type>;
+JoinHandle<typename S::value_type> spawn(S&& sender) {
+    struct StateImpl : State<typename S::value_type> {
+        explicit StateImpl() : State<typename S::value_type>{} {}
 
-    template <class R>
-    struct OperationState {
-        R receiver;
-        S sender;
+        StateImpl(const StateImpl&) = delete;
+        StateImpl& operator=(const StateImpl&) = delete;
+        StateImpl(StateImpl&&) = delete;
+        StateImpl& operator=(StateImpl&&) = delete;
 
-        using T = task_value_type;
+        ~StateImpl() override = default;
 
-        void start() {
-            struct StateImpl : State<T> {
-                explicit StateImpl() : State<T>{} {}
+        struct Receiver {
+            std::shared_ptr<StateImpl> state;
 
-                StateImpl(const StateImpl&) = delete;
-                StateImpl& operator=(const StateImpl&) = delete;
-                StateImpl(StateImpl&&) = delete;
-                StateImpl& operator=(StateImpl&&) = delete;
+            void set_value(typename S::value_type value) {
+                state->received.set_value(std::move(value));
 
-                ~StateImpl() override = default;
+                if (state->listener) {
+                    state->listener->notify();
+                }
+            }
+            void set_exception(std::exception_ptr exc) {
+                state->received.set_exception(std::move(exc));
 
-                struct Receiver {
-                    std::shared_ptr<StateImpl> state;
+                if (state->listener) {
+                    state->listener->notify();
+                }
+            }
+        };
 
-                    void set_value(T value) {
-                        state->received.set_value(std::move(value));
+        using operation_state_type = decltype(std::declval<S>().connect(std::declval<Receiver>()));
 
-                        if (state->listener) {
-                            state->listener->notify();
-                        }
-                    }
-                    void set_exception(std::exception_ptr exc) {
-                        state->received.set_exception(std::move(exc));
-
-                        if (state->listener) {
-                            state->listener->notify();
-                        }
-                    }
-                };
-
-                using operation_state_type = decltype(std::declval<S>().connect(std::declval<Receiver>()));
-
-                std::optional<operation_state_type> operation_state{};
-            };
-
-            auto state = std::make_shared<StateImpl>();
-            state->operation_state.emplace(std::move(sender).connect(typename StateImpl::Receiver{state})).start();
-
-            receiver.set_value(JoinHandle<T>{std::move(state)});
-        }
+        std::optional<operation_state_type> operation_state{};
     };
 
-    template <class R>
-    auto connect(R&& receiver) && {
-        return OperationState{std::forward<R>(receiver), std::move(sender)};
-    }
+    auto state = std::make_shared<StateImpl>();
+    state->operation_state.emplace(std::forward<S>(sender).connect(typename StateImpl::Receiver{state})).start();
 
-    S sender;
-};
-
-template <class S>
-SpawnSender<S> spawn(S&& sender) {
-    return SpawnSender<S>{std::forward<S>(sender)};
+    return JoinHandle<typename S::value_type>{std::move(state)};
 }
 
 } // namespace fastipc::co
