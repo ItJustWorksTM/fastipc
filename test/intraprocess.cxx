@@ -73,10 +73,7 @@ fastipc::co::Co<int> co_main() {
         fastipc::io::Runtime::singleton().scheduler().schedule([&]() { stop_source.request_stop(); });
     }};
 
-    try {
-        static_cast<void>(co_await std::move(handle));
-    } catch (const fastipc::co::StoppedException&) {
-    }
+    static_cast<void>(co_await std::move(handle));
 
     std::println("run done!");
 

@@ -113,23 +113,29 @@ namespace {
 }
 
 co::Co<int> Tower::run(std::stop_token stop_token) {
+
     // NOLINTNEXTLINE(altera-unroll-loops) Service loops should not be unrolled
     for (; !stop_token.stop_requested();) {
-        auto expected_clientfd = co_await accept(m_sockfd, stop_token);
+        try {
+            auto expected_clientfd = co_await accept(m_sockfd, stop_token);
 
-        if (!expected_clientfd.has_value()) {
-            if (expected_clientfd.error() == std::errc::bad_file_descriptor)
-                break;
-            if (expected_clientfd.error() == std::errc::connection_aborted)
-                continue;
+            if (!expected_clientfd.has_value()) {
+                if (expected_clientfd.error() == std::errc::bad_file_descriptor)
+                    break;
+                if (expected_clientfd.error() == std::errc::connection_aborted)
+                    continue;
+            }
+
+            auto clientfd = expect(std::move(expected_clientfd), "failed to accept incoming connection");
+
+            static_cast<void>(co::spawn(serve(std::move(clientfd), stop_token)));
+
+        } catch (const fastipc::co::StoppedException&) {
+            break;
         }
-
-        auto clientfd = expect(std::move(expected_clientfd), "failed to accept incoming connection");
-
-        static_cast<void>(co::spawn(serve(std::move(clientfd), stop_token)));
     }
 
-    co_return 0; // lazy void
+    co_return 0;
 }
 
 void Tower::shutdown() {
