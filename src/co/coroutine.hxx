@@ -233,7 +233,7 @@ SenderAwaiter<A, P> operator co_await(AwaitedBy<A, P>&& awaited_by) {
 }
 
 template <class T, class R>
-class PromiseReceiver : public Receiver<T> {
+class PromiseReceiver final : public Receiver<T> {
 
   public:
     explicit PromiseReceiver(R receiver) : Receiver<T>{}, m_receiver{std::move(receiver)} {}
@@ -246,7 +246,7 @@ class PromiseReceiver : public Receiver<T> {
 };
 
 template <class R>
-class PromiseReceiver<void, R> : public Receiver<void> {
+class PromiseReceiver<void, R> final : public Receiver<void> {
 
   public:
     explicit PromiseReceiver(R receiver) : Receiver<void>{}, m_receiver{std::move(receiver)} {}
