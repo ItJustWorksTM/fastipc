@@ -54,41 +54,12 @@ struct AwaitedBy {
 };
 
 template <class T>
-class [[nodiscard]] Promise {
+class PromiseState;
+
+template <class T>
+class [[nodiscard]] Promise final {
   public:
-    class State {
-
-      public:
-        Promise get_return_object() { return Promise{std::coroutine_handle<State>::from_promise(*this)}; }
-
-        std::suspend_always initial_suspend() noexcept { return {}; }
-
-        struct FinalSuspend {
-            bool await_ready() noexcept { return false; }
-            void await_suspend(std::coroutine_handle<State> h) noexcept { h.promise().complete(); }
-            void await_resume() noexcept {}
-        };
-
-        FinalSuspend final_suspend() noexcept { return {}; }
-
-        void return_value(T value) { received.set_value(std::move(value)); }
-        void unhandled_exception() { received.set_exception(std::current_exception()); }
-
-        template <class A>
-        AwaitedBy<A, typename Promise<T>::State> await_transform(A&& awaitable) {
-            return {std::forward<A>(awaitable)};
-        }
-
-        Receiver<T>* receiver;
-
-      private:
-        // sadly we need to buffer the received value to allow final_suspend to run
-        void complete() { std::move(received).forward(*receiver); }
-
-        Received<T> received;
-    };
-
-    explicit Promise(std::coroutine_handle<State> handle) : m_handle{std::move(handle)} {}
+    explicit Promise(std::coroutine_handle<PromiseState<T>> handle) : m_handle{std::move(handle)} {}
 
     Promise(Promise&) noexcept = delete;
     Promise& operator=(Promise&) noexcept = delete;
@@ -108,15 +79,125 @@ class [[nodiscard]] Promise {
         }
     }
 
-    std::coroutine_handle<State> handle() { return m_handle; }
-    std::coroutine_handle<State> handle() const { return m_handle; }
+    std::coroutine_handle<PromiseState<T>> handle() { return m_handle; }
+    std::coroutine_handle<PromiseState<T>> handle() const { return m_handle; }
 
   private:
-    std::coroutine_handle<State> m_handle;
+    std::coroutine_handle<PromiseState<T>> m_handle;
+};
+
+template <class T>
+class PromiseState final {
+  public:
+    Promise<T> get_return_object() { return Promise<T>{std::coroutine_handle<PromiseState>::from_promise(*this)}; }
+
+    std::suspend_always initial_suspend() noexcept { return {}; }
+
+    struct FinalSuspend final {
+        bool await_ready() noexcept { return false; }
+        void await_suspend(std::coroutine_handle<PromiseState> h) noexcept { h.promise().complete(); }
+        void await_resume() noexcept {}
+    };
+
+    FinalSuspend final_suspend() noexcept { return {}; }
+
+    void return_value(T value) { received.set_value(std::move(value)); }
+    void unhandled_exception() { received.set_exception(std::current_exception()); }
+
+    template <class A>
+    AwaitedBy<A, PromiseState> await_transform(A&& awaitable) {
+        return {std::forward<A>(awaitable)};
+    }
+
+    Receiver<T>* receiver{};
+
+  private:
+    void complete() { std::move(received).forward(*receiver); }
+
+    Received<T> received;
+};
+
+template <>
+class PromiseState<void> final {
+  public:
+    Promise<void> get_return_object() {
+        return Promise<void>{std::coroutine_handle<PromiseState>::from_promise(*this)};
+    }
+
+    std::suspend_always initial_suspend() noexcept { return {}; }
+
+    struct FinalSuspend final {
+        bool await_ready() noexcept { return false; }
+        void await_suspend(std::coroutine_handle<PromiseState> h) noexcept { h.promise().complete(); }
+        void await_resume() noexcept {}
+    };
+
+    FinalSuspend final_suspend() noexcept { return {}; }
+
+    void return_void() { received.set_value(); }
+    void unhandled_exception() { received.set_exception(std::current_exception()); }
+
+    template <class A>
+    AwaitedBy<A, PromiseState> await_transform(A&& awaitable) {
+        return {std::forward<A>(awaitable)};
+    }
+
+    Receiver<void>* receiver{};
+
+  private:
+    void complete() { std::move(received).forward(*receiver); }
+
+    Received<void> received;
+};
+
+template <class T, class P>
+class AwaiterReceiver final {
+  public:
+    AwaiterReceiver(Received<T>& received, std::coroutine_handle<P> awaiter)
+        : m_received{&received}, m_awaiter{awaiter} {}
+
+    void set_value(T value) {
+        m_received->set_value(std::move(value));
+
+        m_awaiter.resume();
+    }
+
+    void set_exception(std::exception_ptr ptr) {
+        m_received->set_exception(std::move(ptr));
+
+        m_awaiter.resume();
+    }
+
+  private:
+    Received<T>* m_received;
+    std::coroutine_handle<P> m_awaiter;
+};
+
+template <class P>
+class AwaiterReceiver<void, P> final {
+  public:
+    AwaiterReceiver(Received<void>& received, std::coroutine_handle<P> awaiter)
+        : m_received{&received}, m_awaiter{awaiter} {}
+
+    void set_value() {
+        m_received->set_value();
+
+        m_awaiter.resume();
+    }
+
+    void set_exception(std::exception_ptr ptr) {
+        m_received->set_exception(std::move(ptr));
+
+        m_awaiter.resume();
+    }
+
+  private:
+    Received<void>* m_received;
+    std::coroutine_handle<P> m_awaiter;
 };
 
 template <class S, class P>
-class SenderAwaiter {
+class SenderAwaiter final {
 
   public:
     using sender_type = S;
@@ -129,7 +210,7 @@ class SenderAwaiter {
     std::coroutine_handle<> await_suspend(std::coroutine_handle<P> cont) {
         // TODO: somehow operation state needs to be moveable..
         auto& operation_state = state.template emplace<operation_state_type>(
-            std::get<sender_type>(std::move(state)).connect(AwaiterReceiver{this->received, cont}));
+            std::get<sender_type>(std::move(state)).connect(AwaiterReceiver<value_type, P>{this->received, cont}));
 
         operation_state.start();
 
@@ -139,29 +220,7 @@ class SenderAwaiter {
     [[nodiscard]] value_type await_resume() { return std::move(received).consume(); }
 
   private:
-    class AwaiterReceiver {
-      public:
-        AwaiterReceiver(Received<value_type>& received, std::coroutine_handle<P> awaiter)
-            : m_received{&received}, m_awaiter{awaiter} {}
-
-        void set_value(value_type value) {
-            m_received->set_value(std::move(value));
-
-            m_awaiter.resume();
-        }
-
-        void set_exception(std::exception_ptr ptr) {
-            m_received->set_exception(ptr);
-
-            m_awaiter.resume();
-        }
-
-      private:
-        Received<value_type>* m_received;
-        std::coroutine_handle<P> m_awaiter;
-    };
-
-    using operation_state_type = decltype(std::declval<S>().connect(std::declval<AwaiterReceiver>()));
+    using operation_state_type = decltype(std::declval<S>().connect(std::declval<AwaiterReceiver<value_type, P>>()));
 
     std::variant<std::monostate, sender_type, operation_state_type> state;
     Received<value_type> received;
@@ -173,12 +232,37 @@ SenderAwaiter<A, P> operator co_await(AwaitedBy<A, P>&& awaited_by) {
     return SenderAwaiter<A, P>{std::move(awaited_by).value};
 }
 
-template <class T>
-class [[nodiscard]] Co {
+template <class T, class R>
+class PromiseReceiver : public Receiver<T> {
 
   public:
-    using promise_type = Promise<T>::State;
+    explicit PromiseReceiver(R receiver) : Receiver<T>{}, m_receiver{std::move(receiver)} {}
 
+    void set_value(T value) override { m_receiver.set_value(std::move(value)); }
+    void set_exception(std::exception_ptr exc) override { m_receiver.set_exception(exc); }
+
+  private:
+    R m_receiver;
+};
+
+template <class R>
+class PromiseReceiver<void, R> : public Receiver<void> {
+
+  public:
+    explicit PromiseReceiver(R receiver) : Receiver<void>{}, m_receiver{std::move(receiver)} {}
+
+    void set_value() override { m_receiver.set_value(); }
+    void set_exception(std::exception_ptr exc) override { m_receiver.set_exception(exc); }
+
+  private:
+    R m_receiver;
+};
+
+template <class T>
+class [[nodiscard]] Co final {
+
+  public:
+    using promise_type = PromiseState<T>;
     using value_type = T;
 
     explicit(false) Co(Promise<T> promise) : m_promise{std::move(promise)} {}
@@ -199,19 +283,7 @@ class [[nodiscard]] Co {
             }
 
           private:
-            class PromiseReceiver : public Receiver<T> {
-
-              public:
-                explicit PromiseReceiver(R receiver) : Receiver<T>{}, m_receiver{std::move(receiver)} {}
-
-                void set_value(T value) override { m_receiver.set_value(std::move(value)); }
-                void set_exception(std::exception_ptr exc) override { m_receiver.set_exception(exc); }
-
-              private:
-                R m_receiver;
-            };
-
-            PromiseReceiver m_receiver;
+            PromiseReceiver<T, R> m_receiver;
             Promise<T> m_promise;
         };
 

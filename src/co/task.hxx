@@ -104,44 +104,70 @@ struct JoinHandle final {
     std::shared_ptr<State<T>> state;
 };
 
+template <class T>
+struct StateReceiver final {
+    std::shared_ptr<State<T>> state;
+
+    void set_value(T value) {
+        state->received.set_value(std::move(value));
+
+        if (state->listener) {
+            state->listener->notify();
+        }
+    }
+
+    void set_exception(std::exception_ptr exc) {
+        state->received.set_exception(std::move(exc));
+
+        if (state->listener) {
+            state->listener->notify();
+        }
+    }
+};
+
+template <>
+struct StateReceiver<void> final {
+    std::shared_ptr<State<void>> state;
+
+    void set_value() {
+        state->received.set_value();
+
+        if (state->listener) {
+            state->listener->notify();
+        }
+    }
+
+    void set_exception(std::exception_ptr exc) {
+        state->received.set_exception(std::move(exc));
+
+        if (state->listener) {
+            state->listener->notify();
+        }
+    }
+};
+
+template <class S>
+struct StateImpl final : State<typename S::value_type> {
+    explicit StateImpl() : State<typename S::value_type>{} {}
+
+    StateImpl(const StateImpl&) = delete;
+    StateImpl& operator=(const StateImpl&) = delete;
+    StateImpl(StateImpl&&) = delete;
+    StateImpl& operator=(StateImpl&&) = delete;
+
+    ~StateImpl() override = default;
+
+    using operation_state_type =
+        decltype(std::declval<S>().connect(std::declval<StateReceiver<typename S::value_type>>()));
+
+    std::optional<operation_state_type> operation_state{};
+};
+
 template <class S>
 JoinHandle<typename S::value_type> spawn(S&& sender) {
-    struct StateImpl : State<typename S::value_type> {
-        explicit StateImpl() : State<typename S::value_type>{} {}
-
-        StateImpl(const StateImpl&) = delete;
-        StateImpl& operator=(const StateImpl&) = delete;
-        StateImpl(StateImpl&&) = delete;
-        StateImpl& operator=(StateImpl&&) = delete;
-
-        ~StateImpl() override = default;
-
-        struct Receiver {
-            std::shared_ptr<StateImpl> state;
-
-            void set_value(typename S::value_type value) {
-                state->received.set_value(std::move(value));
-
-                if (state->listener) {
-                    state->listener->notify();
-                }
-            }
-            void set_exception(std::exception_ptr exc) {
-                state->received.set_exception(std::move(exc));
-
-                if (state->listener) {
-                    state->listener->notify();
-                }
-            }
-        };
-
-        using operation_state_type = decltype(std::declval<S>().connect(std::declval<Receiver>()));
-
-        std::optional<operation_state_type> operation_state{};
-    };
-
-    auto state = std::make_shared<StateImpl>();
-    state->operation_state.emplace(std::forward<S>(sender).connect(typename StateImpl::Receiver{state})).start();
+    auto state = std::make_shared<StateImpl<S>>();
+    state->operation_state.emplace(std::forward<S>(sender).connect(StateReceiver<typename S::value_type>{state}))
+        .start();
 
     return JoinHandle<typename S::value_type>{std::move(state)};
 }

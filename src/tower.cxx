@@ -112,7 +112,7 @@ namespace {
     co_return Tower{expect(co_await io::PolledFd::create(std::move(sockfd)), "failed to created polled fd")};
 }
 
-co::Co<int> Tower::run(std::stop_token stop_token) {
+co::Co<void> Tower::run(std::stop_token stop_token) {
 
     // NOLINTNEXTLINE(altera-unroll-loops) Service loops should not be unrolled
     for (; !stop_token.stop_requested();) {
@@ -135,14 +135,14 @@ co::Co<int> Tower::run(std::stop_token stop_token) {
         }
     }
 
-    co_return 0;
+    co_return;
 }
 
 void Tower::shutdown() {
     // expect(io::sysCheck(::shutdown(m_sockfd.fd(), SHUT_RD)), "Failed to shutdown tower socket");
 }
 
-co::Co<int> Tower::serve(io::PolledFd clientfd, std::stop_token stop_token) {
+co::Co<void> Tower::serve(io::PolledFd clientfd, std::stop_token stop_token) {
     std::array<std::byte, 128u> buf{}; // NOLINT(*-magic-numbers)
     const auto bytes_read =
         expect(co_await io::aread(clientfd, std::span{buf}, stop_token), "failed to read from client");
@@ -203,7 +203,7 @@ co::Co<int> Tower::serve(io::PolledFd clientfd, std::stop_token stop_token) {
     // TODO: asyncify
     static_cast<void>(expect(io::sysVal(::sendmsg(clientfd.fd(), &msg, 0)), "failed to send reply to client"));
 
-    co_return 0; // too lazy for void
+    co_return;
 }
 
 } // namespace fastipc

@@ -32,7 +32,7 @@ class Tower final {
   public:
     [[nodiscard]] static co::Co<Tower> create(std::string_view path);
 
-    co::Co<int> run(std::stop_token stop_token);
+    co::Co<void> run(std::stop_token stop_token);
     void shutdown();
 
   private:
@@ -45,7 +45,7 @@ class Tower final {
 
     explicit Tower(io::PolledFd sockfd) noexcept : m_sockfd{std::move(sockfd)} {}
 
-    co::Co<int> serve(io::PolledFd clientfd, std::stop_token stop_token);
+    co::Co<void> serve(io::PolledFd clientfd, std::stop_token stop_token);
 
     io::PolledFd m_sockfd;
     std::unordered_map<std::string, ChannelDescriptor> m_channels;
