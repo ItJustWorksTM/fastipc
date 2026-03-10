@@ -30,7 +30,7 @@ class Scheduler final {
   public:
     explicit Scheduler(io::Reactor* reactor = nullptr) : m_reactor(reactor) {}
 
-    void schedule(std::move_only_function<void()> fn) {
+    void schedule(std::function<void()> fn) {
         auto lock = std::scoped_lock{m_child_lock};
 
         m_queue.push(std::move(fn));
@@ -60,7 +60,7 @@ class Scheduler final {
 
   private:
     mutable std::recursive_mutex m_child_lock;
-    std::queue<std::move_only_function<void()>> m_queue;
+    std::queue<std::function<void()>> m_queue;
 
     io::Reactor* m_reactor;
 };
