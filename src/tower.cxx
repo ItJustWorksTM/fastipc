@@ -41,10 +41,11 @@
 #include <unistd.h>
 #include "co/task.hxx"
 
+#include <stop_token>
+#include "co/coroutine.hxx"
 #include "io/cursor.hxx"
 #include "io/fd.hxx"
 #include "io/polled_fd.hxx"
-#include "io/reactor.hxx"
 #include "io/result.hxx"
 #include "channel.hxx"
 #include "local_proto.hxx"
@@ -130,7 +131,7 @@ co::Co<void> Tower::run(std::stop_token stop_token) {
 
             static_cast<void>(co::spawn(serve(std::move(clientfd), stop_token)));
 
-        } catch (const fastipc::co::StoppedException&) {
+        } catch (const fastipc::io::StoppedException&) {
             break;
         }
     }
@@ -166,6 +167,7 @@ co::Co<void> Tower::serve(io::PolledFd clientfd, std::stop_token stop_token) {
         // NOLINTNEXTLINE(*-narrowing-conversions)
         expect(io::sysCheck(::ftruncate(channel.memfd.fd(), channel.total_size)), "failed to truncate channel memory");
 
+        // NOLINTNEXTLINE(misc-const-correctness)
         void* ptr = expect(
             io::sysVal(::mmap(nullptr, channel.total_size, PROT_READ | PROT_WRITE, MAP_SHARED, channel.memfd.fd(), 0)),
             "failed to mmap channel memory");

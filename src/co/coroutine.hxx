@@ -9,11 +9,6 @@
 
 namespace fastipc::co {
 
-class StoppedException final : public std::exception {
-  public:
-    [[nodiscard]] const char* what() const noexcept override { return "operation stopped"; }
-};
-
 template <class T>
 class Receiver {
   public:

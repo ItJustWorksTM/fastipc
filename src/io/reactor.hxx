@@ -56,6 +56,8 @@ class Reactor final {
         }
     };
 
+    static constexpr auto kDefaultMaxEvents = 512ul;
+
     Reactor(const Reactor&) noexcept = delete;
     Reactor& operator=(const Reactor&) noexcept = delete;
 
@@ -64,7 +66,7 @@ class Reactor final {
 
     ~Reactor() = default;
 
-    static expected<Reactor> create() noexcept;
+    static expected<Reactor> create(std::size_t max_events = kDefaultMaxEvents) noexcept;
     expected<void> react(std::optional<std::chrono::milliseconds> timeout) noexcept;
 
     expected<void> interrupt() noexcept;
@@ -74,7 +76,7 @@ class Reactor final {
     expected<void> unregister(Registration* registration) noexcept;
 
   private:
-    explicit Reactor(Fd event_fd, Fd epoll_fd);
+    explicit Reactor(Fd event_fd, Fd epoll_fd, std::size_t max_events);
 
     expected<std::span<::epoll_event>> wait(std::optional<std::chrono::milliseconds> timeout) noexcept;
     void process(std::span<::epoll_event> events) noexcept;

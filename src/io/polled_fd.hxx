@@ -31,6 +31,11 @@
 
 namespace fastipc::io {
 
+class StoppedException final : public std::exception {
+  public:
+    [[nodiscard]] const char* what() const noexcept override { return "operation stopped"; }
+};
+
 constexpr bool is_error_blocking(std::error_code error) noexcept {
     return error == std::errc::operation_would_block || error == std::errc::resource_unavailable_try_again;
 }
@@ -150,7 +155,7 @@ class TryIoSender final {
             m_stop_fn.reset();
 
             m_state = State::Stopped;
-            m_receiver.set_exception(std::make_exception_ptr(co::StoppedException{}));
+            m_receiver.set_exception(std::make_exception_ptr(StoppedException{}));
         }
 
         const io::PolledFd* m_fd;

@@ -17,6 +17,7 @@
  */
 
 #include <stop_token>
+#include "co/coroutine.hxx"
 #include "io/context.hxx"
 #include "io/result.hxx"
 #include "tower.hxx"
@@ -26,7 +27,7 @@ namespace {
 
 co::Co<int> main() {
     auto tower = co_await fastipc::Tower::create("fastipcd");
-    std::stop_source stop_source{};
+    const std::stop_source stop_source{};
     static_cast<void>(co_await tower.run(stop_source.get_token()));
 
     co_return 0;

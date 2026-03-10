@@ -24,9 +24,12 @@
 #include "fastipc.hxx"
 #include "tower.hxx"
 
+#include <stop_token>
+#include <utility>
 #include "co/coroutine.hxx"
 #include "co/task.hxx"
 #include "io/context.hxx"
+#include "io/result.hxx"
 
 namespace {
 

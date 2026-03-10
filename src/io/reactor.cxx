@@ -31,11 +31,12 @@
 
 namespace fastipc::io {
 
-Reactor::Reactor(Fd event_fd, Fd epoll_fd) : m_event_fd_{std::move(event_fd)}, m_epoll_fd_{std::move(epoll_fd)} {
-    m_events_buf_.resize(512);
+Reactor::Reactor(Fd event_fd, Fd epoll_fd, std::size_t max_events)
+    : m_event_fd_{std::move(event_fd)}, m_epoll_fd_{std::move(epoll_fd)} {
+    m_events_buf_.resize(max_events);
 }
 
-expected<Reactor> Reactor::create() noexcept {
+expected<Reactor> Reactor::create(std::size_t max_events) noexcept {
     return adoptSysFd(::eventfd(0, EFD_CLOEXEC))
         .and_then([](Fd event_fd) {
             return adoptSysFd(::epoll_create1(0))
@@ -48,7 +49,9 @@ expected<Reactor> Reactor::create() noexcept {
                 })
                 .transform([&](Fd epoll_fd) { return std::pair{std::move(event_fd), std::move(epoll_fd)}; });
         })
-        .transform([](std::pair<Fd, Fd> fds) { return Reactor{std::move(fds.first), std::move(fds.second)}; });
+        .transform([max_events](std::pair<Fd, Fd> fds) {
+            return Reactor{std::move(fds.first), std::move(fds.second), max_events};
+        });
 }
 
 expected<void> Reactor::react(std::optional<std::chrono::milliseconds> timeout) noexcept {
