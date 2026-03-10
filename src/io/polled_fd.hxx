@@ -51,7 +51,9 @@ class PolledFd final {
         }
     }
 
-    static co::Co<expected<PolledFd>> create(Fd fd) noexcept { return create(std::move(fd), Runtime::singleton().reactor()); }
+    static co::Co<expected<PolledFd>> create(Fd fd) noexcept {
+        return create(std::move(fd), Runtime::singleton().reactor());
+    }
 
     static co::Co<expected<PolledFd>> create(Fd fd, Reactor& reactor) noexcept {
         co_return setBlocking(fd, false)
@@ -61,7 +63,6 @@ class PolledFd final {
 
     [[nodiscard]] constexpr const int& fd() const noexcept { return m_fd.fd(); }
     [[nodiscard]] Reactor& reactor() const noexcept { return *m_reactor; }
-
 
   private:
     template <class>
@@ -203,6 +204,12 @@ inline co::Co<expected<PolledFd>> accept(PolledFd& fd, std::stop_token stop_toke
 [[nodiscard]] inline co::Co<expected<std::size_t>> aread(PolledFd& fd, std::span<std::byte> buf,
                                                          std::stop_token stop_token = {}) {
     co_return co_await io::TryIoSender{fd, io::Direction::Read, std::move(stop_token), [&]() { return read(fd, buf); }};
+}
+
+[[nodiscard]] inline co::Co<expected<std::size_t>> asendmsg(PolledFd& fd, ::msghdr& buf, int flags,
+                                                            std::stop_token stop_token = {}) {
+    co_return co_await io::TryIoSender{fd, io::Direction::Read, std::move(stop_token),
+                                       [&]() { return sysVal(::sendmsg(fd.fd(), &buf, flags)); }};
 }
 
 } // namespace fastipc::io
