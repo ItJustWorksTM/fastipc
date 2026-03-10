@@ -203,7 +203,6 @@ class SenderAwaiter final {
     bool await_ready() noexcept { return false; }
 
     std::coroutine_handle<> await_suspend(std::coroutine_handle<P> cont) {
-        // TODO: somehow operation state needs to be moveable..
         auto& operation_state = state.template emplace<operation_state_type>(
             std::get<sender_type>(std::move(state)).connect(AwaiterReceiver<value_type, P>{this->received, cont}));
 
@@ -272,8 +271,6 @@ class [[nodiscard]] Co final {
 
             void start() {
                 m_promise.handle().promise().receiver = &m_receiver;
-
-                // TODO: schedule it
                 m_promise.handle().resume();
             }
 
