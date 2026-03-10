@@ -202,7 +202,8 @@ co::Co<void> Tower::serve(io::PolledFd clientfd, std::stop_token stop_token) {
     std::memcpy(CMSG_DATA(cmsg), &channel.memfd.fd(), sizeof(channel.memfd));
     msg.msg_controllen = cmsg->cmsg_len;
 
-    static_cast<void>(expect(co_await io::asendmsg(clientfd, msg, 0), "failed to send reply to client"));
+    auto const send_n = expect(co_await io::asendmsg(clientfd, msg, 0), "failed to send reply to client");
+    static_cast<void>(send_n);
 
     co_return;
 }
