@@ -51,12 +51,12 @@ class PolledFd final {
         }
     }
 
-    static co::Co<expected<PolledFd>> create(Fd fd) noexcept {
+    static expected<PolledFd> create(Fd fd) noexcept {
         return create(std::move(fd), Runtime::singleton().reactor());
     }
 
-    static co::Co<expected<PolledFd>> create(Fd fd, Reactor& reactor) noexcept {
-        co_return setBlocking(fd, false)
+    static expected<PolledFd> create(Fd fd, Reactor& reactor) noexcept {
+        return setBlocking(fd, false)
             .and_then([&]() { return reactor.registerFd(fd); })
             .transform([&](auto* registration) { return PolledFd{std::move(fd), registration, reactor}; });
     }
@@ -198,7 +198,7 @@ inline co::Co<expected<PolledFd>> accept(PolledFd& fd, std::stop_token stop_toke
         co_return unexpected{accepted_fd_res.error()};
     }
 
-    co_return co_await PolledFd::create(std::move(accepted_fd_res).value(), fd.reactor());
+    co_return PolledFd::create(std::move(accepted_fd_res).value(), fd.reactor());
 }
 
 [[nodiscard]] inline co::Co<expected<std::size_t>> aread(PolledFd& fd, std::span<std::byte> buf,

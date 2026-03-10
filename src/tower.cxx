@@ -109,7 +109,7 @@ namespace {
     constexpr int kListenQueueSize{128};
     expect(io::sysCheck(::listen(sockfd.fd(), kListenQueueSize)), "failed to listen to tower socket");
 
-    co_return Tower{expect(co_await io::PolledFd::create(std::move(sockfd)), "failed to created polled fd")};
+    co_return Tower{expect(io::PolledFd::create(std::move(sockfd)), "failed to created polled fd")};
 }
 
 co::Co<void> Tower::run(std::stop_token stop_token) {
