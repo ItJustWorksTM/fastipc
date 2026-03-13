@@ -47,12 +47,9 @@ class Reactor final {
         std::function<void()> write_cb;
 
         void callback(io::Direction direction, std::function<void()> cb) noexcept {
-            // could make thread safe if we want to interrupt from different threads...
             auto old = std::exchange(direction == io::Direction::Read ? read_cb : write_cb, std::move(cb));
 
-            if (old) {
-                old();
-            }
+            static_cast<void>(old);
         }
     };
 

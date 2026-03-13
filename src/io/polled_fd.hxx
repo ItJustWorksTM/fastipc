@@ -176,7 +176,7 @@ class TryIoSender final {
         struct StopFn final {
             OperationState* self;
 
-            void operator()() noexcept { self->m_fd->m_registration->callback(self->m_direction, {}); }
+            void operator()() noexcept { self->m_fd->m_registration->callback(self->m_direction, {}); self->poll(); }
         };
 
         // cb is not moveable..

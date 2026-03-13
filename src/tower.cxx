@@ -43,6 +43,7 @@
 
 #include <stop_token>
 #include "co/coroutine.hxx"
+#include "io/context.hxx"
 #include "io/cursor.hxx"
 #include "io/fd.hxx"
 #include "io/polled_fd.hxx"
@@ -147,6 +148,8 @@ co::Co<void> Tower::serve(io::PolledFd clientfd, std::stop_token stop_token) {
     std::array<std::byte, 128u> buf{}; // NOLINT(*-magic-numbers)
     const auto bytes_read =
         expect(co_await io::aread(clientfd, std::span{buf}, stop_token), "failed to read from client");
+
+    co_await io::yield();
 
     auto recvbuf = std::span<const std::byte>{buf}.first(bytes_read);
     const auto request = expect(expect(readClientRequest(recvbuf), "invalid request"), "incomplete message");

@@ -86,4 +86,30 @@ class Runtime final {
     std::unique_ptr<co::Scheduler> m_scheduler;
 };
 
+class YieldSender final {
+  public:
+    using value_type = void;
+
+    explicit YieldSender(co::Scheduler& scheduler) : m_scheduler{&scheduler} {}
+
+    template <class R>
+    auto connect(R&& receiver) {
+        struct OperationState final {
+            R receiver;
+            co::Scheduler* scheduler;
+
+            void start() {
+                scheduler->schedule([this]() { receiver.set_value(); });
+            }
+        };
+
+        return OperationState{std::forward<R>(receiver), m_scheduler};
+    }
+
+  private:
+    co::Scheduler* m_scheduler;
+};
+
+inline YieldSender yield() { return YieldSender{Runtime::singleton().scheduler()}; }
+
 } // namespace fastipc::io

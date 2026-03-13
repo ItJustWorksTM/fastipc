@@ -30,6 +30,7 @@ class Scheduler final {
   public:
     explicit Scheduler(io::Reactor* reactor = nullptr) : m_reactor(reactor) {}
 
+    // optimize by making a custom callable interface
     void schedule(std::function<void()> fn) {
         auto lock = std::scoped_lock{m_child_lock};
 
