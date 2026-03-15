@@ -68,6 +68,12 @@ expected<std::span<::epoll_event>> Reactor::wait(std::optional<std::chrono::mill
     const auto wait_res = sysVal(
         ::epoll_wait(m_epoll_fd_.fd(), m_events_buf_.data(), static_cast<int>(m_events_buf_.size()), timeout_ms));
 
+    if (!wait_res.has_value()) {
+        if (wait_res.error() == std::errc::interrupted) {
+            return {};
+        }
+    }
+
     return wait_res.transform([this](int n) { return std::span{m_events_buf_}.first(static_cast<std::size_t>(n)); });
 }
 

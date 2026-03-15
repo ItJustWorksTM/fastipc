@@ -36,7 +36,7 @@ class StoppedException final : public std::exception {
     [[nodiscard]] const char* what() const noexcept override { return "operation stopped"; }
 };
 
-constexpr bool is_error_blocking(std::error_code error) noexcept {
+constexpr bool isErrorBlocking(std::error_code error) noexcept {
     return error == std::errc::operation_would_block || error == std::errc::resource_unavailable_try_again;
 }
 
@@ -135,7 +135,7 @@ class TryIoSender final {
                 return;
             }
 
-            if (!is_error_blocking(res.error())) {
+            if (!isErrorBlocking(res.error())) {
                 set_value(std::move(res));
                 return;
             }
