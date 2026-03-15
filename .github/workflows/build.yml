@@ -21,7 +21,7 @@ jobs:
             ld: LLD
             ldflags: -lllvmlibc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: rui314/setup-mold@v1
         if: matrix.toolchain.name == 'GCC'
       - name: Grab more recent Clang/LLVM

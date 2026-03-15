@@ -5,7 +5,7 @@ jobs:
     name: CMake
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Fetch CMakeFormat 
         run: pip install cmakelang
       - run: git config include.path ../.gitconfig
@@ -15,7 +15,7 @@ jobs:
     name: C++
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Fetch ClangFormat
       run: |
           sudo wget -O /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
