@@ -47,7 +47,7 @@ endif ()
 target_compile_features (fastipc INTERFACE cxx_std_17)
 target_compile_features (fastipc PRIVATE cxx_std_23)
 target_compile_options (fastipc PRIVATE ${FASTIPC_COMPILE_OPTIONS} -Wno-zero-length-array)
-target_include_directories (fastipc PUBLIC src)
+target_include_directories (fastipc PRIVATE src)
 
 add_library (tower OBJECT)
 target_include_directories (tower PUBLIC src)
