@@ -44,7 +44,7 @@ if (NOT DEFINED CMAKE_CXX_CLANG_TIDY OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Cla
     target_precompile_headers (fastipc PUBLIC include/fastipc.hxx)
 endif ()
 
-target_compile_features (fastipc INTERFACE cxx_std_23)
+target_compile_features (fastipc INTERFACE cxx_std_17)
 target_compile_features (fastipc PRIVATE cxx_std_23)
 target_compile_options (fastipc PRIVATE ${FASTIPC_COMPILE_OPTIONS} -Wno-zero-length-array)
 target_include_directories (fastipc PUBLIC src)
