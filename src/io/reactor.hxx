@@ -25,7 +25,6 @@
 
 #include <functional>
 #include <optional>
-#include <print>
 #include <utility>
 #include <vector>
 #include <sys/epoll.h>
@@ -47,9 +46,8 @@ class Reactor final {
         std::function<void()> write_cb;
 
         void callback(io::Direction direction, std::function<void()> cb) noexcept {
-            auto old = std::exchange(direction == io::Direction::Read ? read_cb : write_cb, std::move(cb));
-
-            static_cast<void>(old);
+            auto& rw_cb = direction == io::Direction::Read ? read_cb : write_cb;
+            rw_cb = std::move(cb);
         }
     };
 
