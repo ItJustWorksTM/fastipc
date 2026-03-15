@@ -37,7 +37,6 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <unistd.h>
 
 #include "io/cursor.hxx"
 #include "io/fd.hxx"
@@ -81,7 +80,7 @@ void writeClientRequest(std::span<std::byte>& buf, const ClientRequest& request)
     writeClientRequest(sndbuf, request);
 
     const auto bytes_written =
-        expect(io::sysVal(::write(sockfd.fd(), buf.data(), buf.size() - sndbuf.size())), "failed to write to tower");
+        expect(io::write(sockfd, std::span{buf}.first(buf.size() - sndbuf.size())), "failed to write to tower");
     static_cast<void>(bytes_written); // seq packet
 
     std::size_t total_size{0U};
