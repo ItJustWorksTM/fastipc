@@ -129,7 +129,8 @@ void Tower::serve(io::Fd clientfd) {
         // NOLINTNEXTLINE(*-narrowing-conversions)
         expect(io::sysCheck(::ftruncate(channel.memfd.fd(), channel.total_size)), "failed to truncate channel memory");
 
-        void* ptr = expect(
+        // NOLINTNEXTLINE(misc-const-correctness) placement-new requires non-const pointee type
+        void* const ptr = expect(
             io::sysVal(::mmap(nullptr, channel.total_size, PROT_READ | PROT_WRITE, MAP_SHARED, channel.memfd.fd(), 0)),
             "failed to mmap channel memory");
 
