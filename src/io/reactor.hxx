@@ -53,15 +53,7 @@ class Reactor final {
         }
     };
 
-    static constexpr auto kDefaultMaxEvents = 512ul;
-
-    Reactor(const Reactor&) noexcept = delete;
-    Reactor& operator=(const Reactor&) noexcept = delete;
-
-    Reactor(Reactor&&) noexcept = default;
-    Reactor& operator=(Reactor&&) noexcept = default;
-
-    ~Reactor() = default;
+    static constexpr auto kDefaultMaxEvents = 512uz;
 
     static expected<Reactor> create(std::size_t max_events = kDefaultMaxEvents) noexcept;
     expected<void> react(std::optional<std::chrono::milliseconds> timeout) noexcept;

@@ -74,8 +74,7 @@ class [[nodiscard]] Promise final {
         }
     }
 
-    std::coroutine_handle<PromiseState<T>> handle() { return m_handle; }
-    std::coroutine_handle<PromiseState<T>> handle() const { return m_handle; }
+    [[nodiscard]] std::coroutine_handle<PromiseState<T>> handle() const { return m_handle; }
 
   private:
     std::coroutine_handle<PromiseState<T>> m_handle;
