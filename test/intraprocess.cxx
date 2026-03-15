@@ -18,41 +18,75 @@
 
 #include <cassert>
 #include <cstddef>
+#include <print>
 #include <thread>
 
 #include "fastipc.hxx"
 #include "tower.hxx"
 
+#include <stop_token>
+#include <utility>
+#include "co/coroutine.hxx"
+#include "co/task.hxx"
+#include "io/context.hxx"
+#include "io/result.hxx"
+
+namespace {
+
+fastipc::co::Co<int> co_main() {
+    auto tower = co_await fastipc::Tower::create("fastipcd");
+
+    std::stop_source stop_source{};
+    auto handle = fastipc::co::spawn(tower.run(stop_source.get_token()));
+
+    auto test = std::jthread{[&] {
+        std::println("starting test in thead");
+        constexpr std::string_view channel_name{"Hallowed are the Ori"};
+        constexpr std::size_t max_payload_size{sizeof(int)};
+
+        fastipc::Writer writer{channel_name, max_payload_size};
+        fastipc::Reader reader{channel_name, max_payload_size};
+
+        {
+            std::println("reading sample");
+            auto sample = reader.acquire();
+            assert(sample.getSequenceId() == 0);
+            reader.release(sample);
+        }
+
+        {
+            std::println("writing sample");
+            auto sample = writer.prepare();
+            assert(sample.getSequenceId() == 1);
+            *static_cast<int*>(sample.getPayload()) = 5; // NOLINT(*-magic-numbers)
+            writer.submit(sample);
+        }
+
+        {
+            std::println("reading sample");
+            auto sample = reader.acquire();
+            assert(sample.getSequenceId() == 1);
+            assert(*static_cast<const int*>(sample.getPayload()) == 5);
+            reader.release(sample);
+        }
+
+        // tower.shutdown();
+        std::println("test done. stopping handle");
+
+        fastipc::io::Runtime::singleton().scheduler().schedule([&]() { stop_source.request_stop(); });
+    }};
+
+    static_cast<void>(co_await std::move(handle));
+
+    std::println("run done!");
+
+    co_return 0;
+}
+
+} // namespace
+
 int main() {
+    auto runtime = fastipc::expect(fastipc::io::Runtime::create());
 
-    auto tower = fastipc::Tower::create("fastipcd");
-    const std::jthread tower_thread{[&] { tower.run(); }};
-
-    constexpr std::string_view channel_name{"Hallowed are the Ori"};
-    constexpr std::size_t max_payload_size{sizeof(int)};
-
-    fastipc::Writer writer{channel_name, max_payload_size};
-    fastipc::Reader reader{channel_name, max_payload_size};
-
-    {
-        auto sample = reader.acquire();
-        assert(sample.getSequenceId() == 0);
-        reader.release(sample);
-    }
-
-    {
-        auto sample = writer.prepare();
-        assert(sample.getSequenceId() == 1);
-        *static_cast<int*>(sample.getPayload()) = 5; // NOLINT(*-magic-numbers)
-        writer.submit(sample);
-    }
-
-    {
-        auto sample = reader.acquire();
-        assert(sample.getSequenceId() == 1);
-        assert(*static_cast<const int*>(sample.getPayload()) == 5);
-        reader.release(sample);
-    }
-
-    tower.shutdown();
+    return runtime.block_on(co_main);
 }

@@ -1,5 +1,5 @@
 /*
- *  main.cxx
+ *  visitor.hxx
  *  Copyright 2025 ItJustWorksTM
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,28 +16,21 @@
  *
  */
 
-#include <stop_token>
-#include "co/coroutine.hxx"
-#include "io/context.hxx"
-#include "io/result.hxx"
-#include "tower.hxx"
+#pragma once
+
+#include <utility>
+#include <variant>
 
 namespace fastipc {
-namespace {
 
-co::Co<int> main() {
-    auto tower = co_await fastipc::Tower::create("fastipcd");
-    const std::stop_source stop_source{};
-    static_cast<void>(co_await tower.run(stop_source.get_token()));
+template <class... Ts>
+struct Visitor final : Ts... {
+    using Ts::operator()...;
+};
 
-    co_return 0;
+template <class V, class... Ts>
+decltype(auto) match(V&& variant, Ts&&... arms) {
+    return std::visit(Visitor{std::forward<Ts>(arms)...}, std::forward<V>(variant));
 }
 
-} // namespace
 } // namespace fastipc
-
-int main() {
-    auto runtime = fastipc::expect(fastipc::io::Runtime::create());
-
-    return runtime.block_on(fastipc::main);
-}

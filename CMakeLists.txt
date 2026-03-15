@@ -27,9 +27,19 @@ target_sources (
             src/io/addr.hxx
             src/io/addr.cxx
             src/io/endian.hxx
+            src/io/polled_fd.hxx
+            src/io/reactor.hxx
+            src/io/reactor.cxx
+            src/io/context.hxx
+            src/co/scheduler.hxx
+            src/co/coroutine.hxx
+            src/co/task.hxx
+            src/co/received.hxx
             src/fastipc.cxx
+            src/visitor.hxx
             src/channel.hxx
 )
+
 if (NOT DEFINED CMAKE_CXX_CLANG_TIDY OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     target_precompile_headers (fastipc PUBLIC include/fastipc.hxx)
 endif ()
@@ -37,6 +47,7 @@ endif ()
 target_compile_features (fastipc INTERFACE cxx_std_17)
 target_compile_features (fastipc PRIVATE cxx_std_23)
 target_compile_options (fastipc PRIVATE ${FASTIPC_COMPILE_OPTIONS} -Wno-zero-length-array)
+target_include_directories (fastipc PRIVATE src)
 
 add_library (tower OBJECT)
 target_include_directories (tower PUBLIC src)
@@ -48,7 +59,7 @@ target_link_libraries (tower PRIVATE fastipc)
 add_executable (fastipcd)
 target_sources (fastipcd PRIVATE src/main.cxx)
 target_compile_options (fastipcd PRIVATE ${FASTIPC_COMPILE_OPTIONS})
-target_link_libraries (fastipcd PRIVATE tower)
+target_link_libraries (fastipcd PRIVATE tower fastipc)
 
 enable_testing ()
 add_subdirectory (test)
