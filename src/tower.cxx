@@ -43,7 +43,6 @@
 
 #include <stop_token>
 #include "co/coroutine.hxx"
-#include "io/context.hxx"
 #include "io/cursor.hxx"
 #include "io/fd.hxx"
 #include "io/polled_fd.hxx"

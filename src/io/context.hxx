@@ -24,7 +24,6 @@
 #include <utility>
 #include "co/received.hxx"
 #include "co/scheduler.hxx"
-#include "co/task.hxx"
 #include "io/result.hxx"
 #include "reactor.hxx"
 
