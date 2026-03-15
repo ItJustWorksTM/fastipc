@@ -3,17 +3,17 @@ on: [push, pull_request]
 jobs:
   cmake-formatting-check:
     name: CMake
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v5
       - name: Fetch CMakeFormat 
-        run: pip install cmakelang
+        run: pip install cmakelang pyyaml
       - run: git config include.path ../.gitconfig
       - run: git cmake-format
 
   cxx-formatting-check:
     name: C++
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
     - uses: actions/checkout@v5
     - name: Fetch ClangFormat
