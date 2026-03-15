@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <system_error>
 #include <utility>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>

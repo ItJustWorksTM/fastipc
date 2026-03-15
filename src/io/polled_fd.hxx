@@ -56,9 +56,7 @@ class PolledFd final {
         }
     }
 
-    static expected<PolledFd> create(Fd fd) noexcept {
-        return create(std::move(fd), Runtime::singleton().reactor());
-    }
+    static expected<PolledFd> create(Fd fd) noexcept { return create(std::move(fd), Runtime::singleton().reactor()); }
 
     static expected<PolledFd> create(Fd fd, Reactor& reactor) noexcept {
         return setBlocking(fd, false)
@@ -128,20 +126,27 @@ class TryIoSender final {
                 return;
             }
 
-            auto res = m_io();
+            for (;;) {
+                auto res = m_io();
 
-            if (res.has_value()) {
+                if (res.has_value()) {
+                    set_value(std::move(res));
+                    return;
+                }
+
+                if (res.error() == std::errc::interrupted) {
+                    continue;
+                }
+
+                if (isErrorBlocking(res.error())) {
+                    m_state = State::Blocked;
+                    m_fd->m_registration->callback(m_direction, [this]() { poll(); });
+                    return;
+                }
+
                 set_value(std::move(res));
                 return;
             }
-
-            if (!isErrorBlocking(res.error())) {
-                set_value(std::move(res));
-                return;
-            }
-
-            m_state = State::Blocked;
-            m_fd->m_registration->callback(m_direction, [this]() { poll(); });
         }
 
         void set_value(result_type value) {
@@ -176,7 +181,10 @@ class TryIoSender final {
         struct StopFn final {
             OperationState* self;
 
-            void operator()() noexcept { self->m_fd->m_registration->callback(self->m_direction, {}); self->poll(); }
+            void operator()() noexcept {
+                self->m_fd->m_registration->callback(self->m_direction, {});
+                self->poll();
+            }
         };
 
         // cb is not moveable..
