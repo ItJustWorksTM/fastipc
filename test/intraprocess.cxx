@@ -80,7 +80,7 @@ fastipc::co::Co<int> co_main() {
 
     std::println("run done!");
 
-    co_return 0; // too lazy for void
+    co_return 0;
 }
 
 } // namespace
